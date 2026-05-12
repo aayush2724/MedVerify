@@ -30,20 +30,41 @@ FILE_TOO_LARGE = FILE_SIZE_EXCEEDED
 
 # Exception Classes
 class CertSentinelError(Exception):
-    def __init__(self, error_code, message, details=None, status_code=400):
+    def __init__(self, error_code, message, details=None, status_code=400, retryable=False):
         super().__init__(message)
         self.error_code = error_code
         self.message = message
         self.details = details or {}
         self.status_code = status_code
+        self.retryable = retryable
 
 class FileValidationError(CertSentinelError):
     def __init__(self, error_code, message, details=None):
         super().__init__(error_code, message, details, status_code=400)
 
 class ProcessingError(CertSentinelError):
-    def __init__(self, error_code, message, details=None):
-        super().__init__(error_code, message, details, status_code=500)
+    def __init__(self, error_code, message, details=None, retryable=True):
+        super().__init__(error_code, message, details, status_code=500, retryable=retryable)
+
+class PreprocessingError(ProcessingError):
+    def __init__(self, message, details=None, error_code=PREPROCESSING_FAILED):
+        super().__init__(error_code, message, details)
+
+class OCRError(ProcessingError):
+    def __init__(self, message, details=None, error_code=OCR_FAILED, retryable=True):
+        super().__init__(error_code, message, details, retryable=retryable)
+
+class AnalysisError(ProcessingError):
+    def __init__(self, message, details=None, error_code="ANALYSIS_FAILED"):
+        super().__init__(error_code, message, details)
+
+class ModelError(ProcessingError):
+    def __init__(self, message, details=None, error_code=MODEL_INFERENCE_FAILED):
+        super().__init__(error_code, message, details, retryable=False)
+
+class DatabaseError(ProcessingError):
+    def __init__(self, message, details=None):
+        super().__init__(DB_SAVE_FAILED, message, details)
 
 class AuthError(CertSentinelError):
     def __init__(self, error_code, message, details=None, status_code=401):

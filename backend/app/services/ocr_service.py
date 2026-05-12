@@ -1,6 +1,6 @@
 import logging
 from utils.ocr_engine import OCREngine
-from app.exceptions import OCRError
+from app.errors import OCRError
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ class OCRService:
         try:
             text = self.engine.extract_text(processed_image)
             if not text or len(text.strip()) < 10:
-                raise OCRError("Insufficient text extracted.", code="INSUFFICIENT_TEXT", retryable=False)
+                raise OCRError("Insufficient text extracted.", error_code="INSUFFICIENT_TEXT", retryable=False)
             return text
         except OCRError:
             raise

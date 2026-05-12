@@ -31,33 +31,32 @@ def verify_certificate_task(self, filepath, original_filename, user_id, ip_addre
     Background task wrapping VerificationService.verify().
     """
     try:
-        # We need the app context to use the service
-        from flask import current_app
-        service = VerificationService(
-            db.session,
-            current_app.config['MODEL_PATH'],
-            current_app.config['MODEL_VERSION']
-        )
-        
-        record = service.verify(
-            filepath,
-            original_filename,
-            user_id=user_id,
-            ip_address=ip_address
-        )
-        
-        return str(record.id)
-
-    except Exception as exc:
-        # If it's a transient error, retry
         try:
-            self.retry(exc=exc)
-        except Exception:
-            # If retries exhausted or non-retryable error
-            # Mark record as ERROR in DB if possible (requires more logic to track pending records)
-            raise exc
-        finally:
-            # Cleanup temp file on final failure if needed
-            # (Usually done in the route or here)
-            if os.path.exists(filepath):
-                os.remove(filepath)
+            # We need the app context to use the service
+            from flask import current_app
+            service = VerificationService(
+                db.session,
+                current_app.config['MODEL_PATH'],
+                current_app.config['MODEL_VERSION']
+            )
+            
+            record = service.verify(
+                filepath,
+                original_filename,
+                user_id=user_id,
+                ip_address=ip_address
+            )
+            
+            return str(record.id)
+
+        except Exception as exc:
+            # If it's a transient error, retry
+            try:
+                self.retry(exc=exc)
+            except Exception:
+                # If retries exhausted or non-retryable error
+                raise exc
+    finally:
+        # ALWAYS cleanup temp file
+        if os.path.exists(filepath):
+            os.remove(filepath)

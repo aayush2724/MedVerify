@@ -1,5 +1,5 @@
 import logging
-from app.exceptions import DatabaseError
+from app.errors import DatabaseError
 
 logger = logging.getLogger(__name__)
 

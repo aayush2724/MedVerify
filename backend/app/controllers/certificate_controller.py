@@ -4,7 +4,7 @@ import logging
 from flask import current_app
 from werkzeug.utils import secure_filename
 from app.tasks.verification_tasks import verify_certificate_task
-from app.exceptions import PreprocessingError
+from app.errors import PreprocessingError
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ class CertificateController:
     def handle_upload(file):
         """Handle file saving and task triggering."""
         if not file or not file.filename:
-            raise PreprocessingError("No file provided", code="MISSING_FILE")
+            raise PreprocessingError("No file provided", error_code="MISSING_FILE")
 
         safe_input_name = secure_filename(file.filename)
         unique_name = f"{uuid.uuid4()}_{safe_input_name}"
@@ -22,7 +22,7 @@ class CertificateController:
 
         # Basic path traversal protection
         if not os.path.abspath(filepath).startswith(os.path.abspath(upload_dir)):
-            raise PreprocessingError("Invalid file path", code="INVALID_PATH")
+            raise PreprocessingError("Invalid file path", error_code="INVALID_PATH")
 
         try:
             file.save(filepath)

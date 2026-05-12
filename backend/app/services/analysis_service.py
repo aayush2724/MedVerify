@@ -2,7 +2,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils.text_analyzer import TextAnalyzer
 from utils.image_analyzer import ImageAnalyzer
-from app.exceptions import AnalysisError
+from app.errors import AnalysisError
 
 logger = logging.getLogger(__name__)
 
