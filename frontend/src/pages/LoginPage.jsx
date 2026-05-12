@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, ShieldCheck } from 'lucide-react';
-import { login as apiLogin } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 const LoginPage = () => {
-  const [username, setUsername] = useState('admin');
+  const [email, setEmail] = useState('test@example.com');
   const [password, setPassword] = useState('password');
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await apiLogin(username, password);
-      localStorage.setItem('token', data.token);
+      await login(email, password);
       navigate('/');
-    } catch (err) {
-      setError('Invalid credentials. Hint: admin/password');
+    } catch {
+      setError('Invalid credentials');
     }
   };
 
@@ -33,14 +33,14 @@ const LoginPage = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Username</label>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Email</label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
                 className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
           </div>

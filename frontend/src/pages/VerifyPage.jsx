@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, CheckCircle2, AlertCircle, Loader2, FileCheck, Search, Image as ImageIcon, Database, Files } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { Upload, CheckCircle2, AlertCircle, Loader2, FileCheck, Search, Image as ImageIcon, Database, Files, FileText, XCircle, ShieldCheck } from 'lucide-react';
 import { verifyCertificate, getTaskStatus } from '../services/api';
 import ResultCard from '../components/ResultCard';
 
@@ -13,7 +12,6 @@ const steps = [
 ];
 
 const VerifyPage = () => {
-  const [files, setFiles] = useState([]);
   const [queue, setQueue] = useState([]); // { file, status, progress, step, result, error, taskId }
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -29,7 +27,6 @@ const VerifyPage = () => {
         error: null,
         taskId: null
       }));
-      setFiles(prev => [...prev, ...selected]);
       setQueue(prev => [...prev, ...newEntries]);
     }
   };
@@ -80,7 +77,7 @@ const VerifyPage = () => {
               // Simulate step progression
               updateEntry(idx, { step: Math.min(entry.step + 1, 3) });
             }
-          } catch (err) {
+          } catch {
             updateEntry(idx, { status: 'ERROR', error: 'Polling error', taskId: null });
           }
         }, 2000);
@@ -93,7 +90,6 @@ const VerifyPage = () => {
 
   const removeFile = (index) => {
     setQueue(prev => prev.filter((_, i) => i !== index));
-    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { getRecord } from '../services/api';
@@ -25,7 +25,7 @@ const ReportPage = () => {
           decision_logic: data.decision_logic || {},
           extracted_info: data.extracted_fields || {}
         });
-      } catch (err) {
+      } catch {
         setError('Failed to load verification report');
       } finally {
         setIsLoading(false);

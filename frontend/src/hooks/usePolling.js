@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { getTaskStatus } from '../services/api';
 
 export const usePolling = (taskId, onComplete, onError, interval = 2000) => {
@@ -16,7 +16,7 @@ export const usePolling = (taskId, onComplete, onError, interval = 2000) => {
             onError(data.error || 'Task failed', data.code);
             clearInterval(pollInterval);
           }
-        } catch (err) {
+        } catch {
           onError('Connection lost during status check');
           clearInterval(pollInterval);
         }

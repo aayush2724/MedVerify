@@ -11,6 +11,7 @@ from alembic import context
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.database import db
+from app.config import DevelopmentConfig
 from app.models import AuditLog, BatchJob, Permission, User, UserPermission, VerificationRecord
 
 # this is the Alembic Config object, which provides
@@ -25,6 +26,10 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = db.metadata
+
+
+def get_database_url() -> str:
+    return os.environ.get("DATABASE_URL") or DevelopmentConfig.SQLALCHEMY_DATABASE_URI
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -44,7 +49,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    url = get_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -63,7 +68,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    url = get_database_url()
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

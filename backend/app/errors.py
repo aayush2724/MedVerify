@@ -68,6 +68,8 @@ def error_response(error_code, message, details=None, status_code=400, request_i
 
 # Register Error Handlers
 def register_error_handlers(app):
+    from . import jwt
+
     @app.before_request
     def assign_request_id():
         g.request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
@@ -148,6 +150,18 @@ def register_error_handlers(app):
     @app.errorhandler(OperationalError)
     def handle_operational_error(e):
         return error_response(DB_SAVE_FAILED, "Database operational error", status_code=500)
+
+    @jwt.unauthorized_loader
+    def handle_missing_jwt(reason):
+        return error_response(UNAUTHORIZED, reason, status_code=401)
+
+    @jwt.invalid_token_loader
+    def handle_invalid_jwt(reason):
+        return error_response(UNAUTHORIZED, reason, status_code=401)
+
+    @jwt.expired_token_loader
+    def handle_expired_jwt(jwt_header, jwt_payload):
+        return error_response(UNAUTHORIZED, "Token has expired", status_code=401)
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(e):

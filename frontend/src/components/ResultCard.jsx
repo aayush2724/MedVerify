@@ -1,5 +1,4 @@
-import React from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, FileDown, RotateCcw, Info } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, FileDown, RotateCcw, Info, Database } from 'lucide-react';
 import { motion } from 'framer-motion';
 import jsPDF from 'jspdf';
 

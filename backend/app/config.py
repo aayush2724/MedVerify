@@ -14,7 +14,7 @@ class BaseConfig:
 
     # Database — PostgreSQL
     SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "DATABASE_URL", "sqlite:///./certsentinel_dev.db"
+        "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'certsentinel_dev.db')}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
@@ -40,7 +40,10 @@ class BaseConfig:
     RATELIMIT_UPLOAD = "20 per hour"
 
     # CORS
-    CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
+    CORS_ORIGINS = os.environ.get(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
@@ -52,5 +55,14 @@ class ProductionConfig(BaseConfig):
 
 class TestingConfig(BaseConfig):
     TESTING = True
+    SECRET_KEY = "test-secret"
+    JWT_SECRET_KEY = SECRET_KEY
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     CELERY_TASK_ALWAYS_EAGER = True  # run tasks synchronously in tests
+
+
+config_by_name = {
+    "development": DevelopmentConfig,
+    "production": ProductionConfig,
+    "testing": TestingConfig,
+}

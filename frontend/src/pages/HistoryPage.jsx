@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, Calendar, FileText, ChevronRight, Download, Eye } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Search, Filter, Calendar, FileText, ChevronRight, Download, Loader2 } from 'lucide-react';
 import { getRecords } from '../services/api';
 
 const statusColors = {
@@ -12,7 +11,6 @@ const statusColors = {
 
 const HistoryPage = () => {
   const [records, setRecords] = useState([]);
-  const [filtered, setFiltered] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
@@ -22,7 +20,6 @@ const HistoryPage = () => {
       try {
         const { data } = await getRecords();
         setRecords(data);
-        setFiltered(data);
       } catch (err) {
         console.error('Failed to fetch records', err);
       } finally {
@@ -32,7 +29,7 @@ const HistoryPage = () => {
     fetchRecords();
   }, []);
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     let result = records;
     if (searchTerm) {
       result = result.filter(r => 
@@ -43,7 +40,7 @@ const HistoryPage = () => {
     if (statusFilter !== 'ALL') {
       result = result.filter(r => r.status === statusFilter);
     }
-    setFiltered(result);
+    return result;
   }, [searchTerm, statusFilter, records]);
 
   const exportToCSV = () => {

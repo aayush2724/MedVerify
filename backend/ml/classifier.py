@@ -15,7 +15,7 @@ class CertificateClassifier:
             cls._instance = cls(model_path, thresholds=thresholds)
         return cls._instance
 
-    def __init__(self, model_path: str, thresholds: Optional[Dict[str, float]] = None):
+    def __init__(self, model_path: str = "", thresholds: Optional[Dict[str, float]] = None):
         self.model_path = model_path
         self.thresholds = thresholds or {"genuine": 0.75, "suspicious": 0.45}
         self.model = None
@@ -60,13 +60,29 @@ class CertificateClassifier:
         else:
             status = "FAKE"
 
+        reasons = features.get("flags", [])
+        if not reasons:
+            reasons = ["No significant issues detected"]
+
         return {
             "status": status,
             "confidence": confidence,
-            "reasons": features.get("flags", []),
+            "reasons": reasons,
             "model_version": self.metadata.get('version', 'v1.0.0'),
             "features_used": features
         }
+
+    def predict(self, text_features: Dict[str, Any], image_features: Dict[str, Any]) -> Dict[str, Any]:
+        """Backward-compatible prediction API used by older tests and callers."""
+        combined = {
+            **text_features,
+            **image_features,
+            "flags": [
+                *text_features.get("flags", []),
+                *image_features.get("flags", []),
+            ],
+        }
+        return self.classify(combined)
 
     def _fallback_score(self, features: Dict[str, Any]) -> float:
         text_score = float(features.get("text_authenticity_score", 0.5))

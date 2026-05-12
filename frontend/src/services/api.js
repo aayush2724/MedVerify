@@ -51,4 +51,15 @@ export const authAPI = {
   logout: () => api.post('/api/auth/logout'),
 };
 
+export const verifyCertificate = (file, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('certificate', file);
+  return certificateAPI.verifyAsync(formData, onUploadProgress);
+};
+
+export const getTaskStatus = (taskId) => certificateAPI.pollStatus(taskId);
+export const getRecords = (params) => certificateAPI.getAll(params);
+export const getRecord = (id) => certificateAPI.getById(id);
+export const login = (email, password) => authAPI.login({ email, password });
+
 export default api;
