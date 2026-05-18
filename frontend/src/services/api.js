@@ -51,6 +51,14 @@ export const authAPI = {
   logout: () => api.post('/api/auth/logout'),
 };
 
+export const adminAPI = {
+  getThresholds: () => api.get('/api/admin/thresholds'),
+  updateThresholds: (data) => api.put('/api/admin/thresholds', data),
+  getStats: () => api.get('/api/admin/stats'),
+  getAuditLogs: (params) => api.get('/api/admin/audit-logs', { params }),
+  getRecords: (params) => api.get('/api/admin/records', { params }),
+};
+
 export const verifyCertificate = (file, onUploadProgress) => {
   const formData = new FormData();
   formData.append('certificate', file);

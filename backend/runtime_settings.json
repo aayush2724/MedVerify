@@ -1,0 +1,4 @@
+{
+  "confidence_threshold_genuine": 0.75,
+  "confidence_threshold_suspicious": 0.45
+}

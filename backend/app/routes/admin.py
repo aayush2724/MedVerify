@@ -4,6 +4,7 @@ from sqlalchemy import func
 
 from ..database import db
 from ..models import AuditLog, VerificationRecord
+from .. import settings as runtime_settings
 
 bp = Blueprint("admin", __name__)
 
@@ -71,3 +72,57 @@ def stats():
         for status in ("GENUINE", "SUSPICIOUS", "FAKE", "ERROR", "PENDING")
     }
     return jsonify({"total_verifications": total, "by_status": by_status})
+
+
+@bp.get("/thresholds")
+@jwt_required()
+def get_thresholds():
+    require_admin()
+    thresholds = runtime_settings.get_thresholds()
+    return jsonify({
+        "genuine": thresholds["genuine"],
+        "suspicious": thresholds["suspicious"],
+        "description": {
+            "genuine": f"Confidence >= {thresholds['genuine']} → GENUINE",
+            "suspicious": f"Confidence >= {thresholds['suspicious']} → SUSPICIOUS, else FAKE",
+        }
+    })
+
+
+@bp.put("/thresholds")
+@jwt_required()
+def update_thresholds():
+    require_admin()
+    data = request.get_json(silent=True) or {}
+    genuine = data.get("genuine")
+    suspicious = data.get("suspicious")
+
+    if genuine is None or suspicious is None:
+        from ..errors import FileValidationError, VALIDATION_ERROR
+        raise FileValidationError(VALIDATION_ERROR, "Both 'genuine' and 'suspicious' thresholds are required")
+
+    try:
+        genuine = float(genuine)
+        suspicious = float(suspicious)
+    except (TypeError, ValueError):
+        from ..errors import FileValidationError, VALIDATION_ERROR
+        raise FileValidationError(VALIDATION_ERROR, "Thresholds must be numbers between 0 and 1")
+
+    if not (0 < suspicious < genuine <= 1):
+        from ..errors import FileValidationError, VALIDATION_ERROR
+        raise FileValidationError(
+            VALIDATION_ERROR,
+            "Thresholds must satisfy: 0 < suspicious < genuine ≤ 1"
+        )
+
+    updated = runtime_settings.set_thresholds(genuine, suspicious)
+
+    from ml.classifier import CertificateClassifier
+    if CertificateClassifier._instance is not None:
+        CertificateClassifier._instance.thresholds = updated
+
+    return jsonify({
+        "genuine": updated["genuine"],
+        "suspicious": updated["suspicious"],
+        "message": "Thresholds updated successfully"
+    })

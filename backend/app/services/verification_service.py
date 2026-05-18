@@ -17,11 +17,14 @@ class VerificationService:
     _executor = ThreadPoolExecutor(max_workers=4)
 
     def __init__(self, db_session, model_path, model_version):
+        from app.settings import get_thresholds
         self.repo = VerificationRepository(db_session)
         self.audit = AuditRepository(db_session)
         self.classifier = CertificateClassifier.get_instance(model_path)
         self.model_version = model_version
-        self.thresholds = getattr(self.classifier, "thresholds", {"genuine": 0.75, "suspicious": 0.45})
+        runtime_thresholds = get_thresholds()
+        self.classifier.thresholds = runtime_thresholds
+        self.thresholds = runtime_thresholds
         
         # Initialize engines once
         self.processor = DocumentProcessor()
