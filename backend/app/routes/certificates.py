@@ -160,4 +160,23 @@ def export_record(record_id):
     user_id = get_jwt_identity()
     service = get_verification_service()
     record = service.get_record(record_id, user_id=user_id)
-    return jsonify({"report_id": str(record.id), "status": record.status}), 200
+    return jsonify({
+        "report_id": str(record.id),
+        "status": record.status,
+        "confidence_score": record.confidence,
+        "verdict_label": "Likely Genuine" if record.status == "GENUINE" else "Suspicious/Fake",
+        "reasons": record.reasons,
+        "extracted_info": record.extracted_fields,
+        "image_forensics": {
+            "text_score": record.text_score,
+            "image_score": record.image_score,
+            "ela_score": record.ml_features.get("ela_score") if record.ml_features else None,
+            "noise_inconsistency_score": record.ml_features.get("noise_inconsistency_score") if record.ml_features else None,
+            "copy_move_detected": record.ml_features.get("copy_move_detected") if record.ml_features else None,
+            "font_consistency_score": record.ml_features.get("font_consistency_score") if record.ml_features else None,
+        },
+        "processing_time_ms": record.processing_time_ms,
+        "model_version": record.model_version,
+        "filename": record.original_filename,
+        "submitted_at": record.submitted_at.isoformat() if record.submitted_at else None,
+    }), 200

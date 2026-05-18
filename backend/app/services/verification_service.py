@@ -50,8 +50,8 @@ class VerificationService:
                 "confidence_threshold_used": self._threshold_for_status(results["classification"]["status"]),
                 "reasons": results["classification"]["reasons"],
                 "extracted_fields": results["analysis"]["text"].get("extracted_fields", {}),
-                "text_score": results["analysis"]["text"].get("score", 0),
-                "image_score": results["analysis"]["image"].get("score", 0),
+                "text_score": results["analysis"]["text"].get("text_authenticity_score", 0),
+                "image_score": results["analysis"]["image"].get("image_authenticity_score", 0),
                 "ml_features": results["features"],
                 "feature_extraction_metadata": {
                     "pipeline_timings": results["timings"],
@@ -122,8 +122,33 @@ class VerificationService:
         
         # Step 4: Classify
         s4 = time.time()
-        # Combine features for classification
-        features = {**text_results.get('features', {}), **image_results.get('features', {})}
+        # Build feature dict from the actual keys returned by each analyzer
+        extracted_fields = text_results.get("extracted_fields", {})
+        features = {
+            # Text features
+            "text_authenticity_score": text_results.get("text_authenticity_score", 0.0),
+            "has_dates": bool(extracted_fields.get("dates")),
+            "has_registration_number": bool(extracted_fields.get("registration_numbers")),
+            "has_hospital_name": bool(extracted_fields.get("hospital_name")),
+            "has_doctor_name": bool(extracted_fields.get("doctor_name")),
+            "diagnosis_count": len(extracted_fields.get("diagnosis_keywords", [])),
+            "has_phone_number": bool(extracted_fields.get("phone_numbers")),
+            "text_length": text_results.get("raw_text_length", 0),
+            "unusual_char_ratio": (
+                len([c for c in (extracted_text or "") if ord(c) > 127])
+                / max(len(extracted_text or ""), 1)
+            ),
+            # Image features
+            "image_authenticity_score": image_results.get("image_authenticity_score", 0.0),
+            "ela_score": image_results.get("ela_score", 0.0),
+            "ela_suspicious_regions": image_results.get("ela_suspicious_regions", 0),
+            "noise_inconsistency_score": image_results.get("noise_inconsistency_score", 0.0),
+            "copy_move_detected": image_results.get("copy_move_detected", False),
+            "font_consistency_score": image_results.get("font_consistency_score", 1.0),
+            "metadata_software_detected": bool(image_results.get("metadata_flags")),
+            # Combined flags for rule-based fallback
+            "flags": text_results.get("flags", []) + image_results.get("flags", []),
+        }
         classification = self.classifier.classify(features)
         timings['classify'] = time.time() - s4
         

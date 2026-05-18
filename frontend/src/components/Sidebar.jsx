@@ -1,25 +1,25 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 
+const DEFAULT_AVATAR_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e8e0f0'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%237c5cbf'/%3E%3Cellipse cx='20' cy='34' rx='12' ry='8' fill='%237c5cbf'/%3E%3C/svg%3E`;
+
+const ALL_NAV_ITEMS = [
+  { path: '/dashboard', label: 'Command Center', icon: 'dashboard', roles: ['admin'] },
+  { path: '/analysis', label: 'Analysis Engine', icon: 'query_stats', roles: ['admin', 'verifier'] },
+  { path: '/forensic', label: 'Forensic Report', icon: 'description', roles: ['admin', 'verifier'] },
+  { path: '/vault', label: 'Verification Vault', icon: 'verified_user', roles: ['admin', 'verifier', 'viewer'] },
+];
+
 export default function Sidebar({ user }) {
   const navigate = useNavigate();
   const location = useLocation();
 
   const isActive = (path) => location.pathname === path;
 
-  const defaultUser = {
-    name: "Dr. Sarah Chen",
-    role: "Senior Registrar",
-    avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuBa6G3Q8kwHSiHkw7ZmkBXFJky0E9nooljgfIaRSqatAHeQohRAz7wxLsJnIHwFWtk6J6kStg09ChHiMuGo5_7f4_P9oNGy41lTC5ukZbE1oAM4Mtk9drLndh--YKEwsOGw_3jXXs1ZibzTRB1jK_ooTyFzbZknTRvR48TnVXh_5r3LVZ6M6sTAJQ7Yi_oPsC4Md-qI70bwczOcDCWSwmtESqPXNVGJwYqs0lC2N1k0GX6rlmT8BpY5Oz4VZfEIad8PBpgLau8by2zK"
-  };
+  const currentUser = user || { name: 'Guest', role: 'viewer', avatar: null };
 
-  const currentUser = user || defaultUser;
-
-  const navItems = [
-    { path: '/dashboard', label: 'Command Center', icon: 'dashboard' },
-    { path: '/analysis', label: 'Analysis Engine', icon: 'query_stats' },
-    { path: '/forensic', label: 'Forensic Report', icon: 'description' },
-    { path: '/vault', label: 'Verification Vault', icon: 'verified_user' },
-  ];
+  const navItems = ALL_NAV_ITEMS.filter(
+    (item) => !item.roles || item.roles.includes(currentUser.role)
+  );
 
   return (
     <nav className="h-screen w-72 fixed left-0 top-0 border-r border-white/40 bg-white/60 backdrop-blur-3xl flex flex-col p-container-padding z-50">
@@ -62,9 +62,10 @@ export default function Sidebar({ user }) {
         </button>
         <div className="mt-6 flex items-center gap-3 px-2">
           <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm">
-            <img 
-              alt="Medical Professional Avatar" 
-              src={currentUser.avatar}
+            <img
+              alt="User Avatar"
+              src={currentUser.avatar || DEFAULT_AVATAR_SVG}
+              onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR_SVG; }}
             />
           </div>
           <div className="text-left">

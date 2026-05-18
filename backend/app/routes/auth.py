@@ -5,14 +5,13 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity, get_jwt
 )
-from flask_bcrypt import Bcrypt
 from ..database import db
 from ..models import User
+from .. import bcrypt
 from ..errors import AuthError, FileValidationError, UNAUTHORIZED, VALIDATION_ERROR
 from ..repositories.audit_repository import AuditRepository
 
 bp = Blueprint('auth', __name__)
-bcrypt = Bcrypt()
 # audit_repo will be initialized in the routes to ensure session context
 
 # Setup Redis for token blocklist
@@ -96,7 +95,7 @@ def me():
     except (ValueError, AttributeError):
         raise AuthError(UNAUTHORIZED, "Invalid user ID")
     
-    user = User.query.get(user_uuid)
+    user = db.session.get(User, user_uuid)
     if not user:
         raise AuthError(UNAUTHORIZED, "User not found")
     return jsonify({

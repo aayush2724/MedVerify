@@ -59,7 +59,7 @@ function AnimatedRoutes() {
           </ProtectedRoute>
         } />
         <Route path="/analysis" element={
-          <ProtectedRoute requiredRole="admin">
+          <ProtectedRoute requiredRole="verifier">
             <motion.div {...pageVariants}>
               <Suspense fallback={<PageLoader />}>
                 <AnalysisEngine />
@@ -68,7 +68,7 @@ function AnimatedRoutes() {
           </ProtectedRoute>
         } />
         <Route path="/forensic" element={
-          <ProtectedRoute requiredRole="admin">
+          <ProtectedRoute requiredRole="verifier">
             <motion.div {...pageVariants}>
               <Suspense fallback={<PageLoader />}>
                 <ForensicReport />
@@ -77,7 +77,7 @@ function AnimatedRoutes() {
           </ProtectedRoute>
         } />
         <Route path="/vault" element={
-          <ProtectedRoute requiredRole="admin">
+          <ProtectedRoute requiredRole="viewer">
             <motion.div {...pageVariants}>
               <Suspense fallback={<PageLoader />}>
                 <VerificationVault />

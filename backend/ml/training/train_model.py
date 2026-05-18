@@ -22,14 +22,19 @@ FEATURE_COLUMNS = [
     'text_authenticity_score',
     'image_authenticity_score',
     'has_dates',
-    'has_reg_number',
-    'has_hospital',
-    'has_doctor',
-    'diagnosis_keyword_count',
+    'has_registration_number',
+    'has_hospital_name',
+    'has_doctor_name',
+    'diagnosis_count',
     'ela_score',
     'noise_inconsistency_score',
     'copy_move_detected',
     'font_consistency_score',
+    'has_phone_number',
+    'unusual_char_ratio',
+    'text_length',
+    'ela_suspicious_regions',
+    'metadata_software_detected',
 ]
 LABEL_COLUMN = 'label'  # 1 = genuine, 0 = fake
 
