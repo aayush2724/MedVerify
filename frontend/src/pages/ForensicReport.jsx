@@ -22,9 +22,9 @@ export default function ForensicReport() {
       <Sidebar user={user} />
 
       {/* Main Canvas */}
-      <main className="ml-72 p-gutter min-h-screen">
+      <main className="ml-20 lg:ml-72 p-4 lg:p-gutter min-h-screen transition-all duration-300">
         {/* TopAppBar */}
-        <header className="fixed top-0 right-0 left-72 h-20 z-40 bg-white/40 backdrop-blur-xl border-b border-white/20 shadow-sm flex items-center justify-between px-gutter">
+        <header className="fixed top-0 right-0 left-20 lg:left-72 h-20 z-40 bg-white/40 backdrop-blur-xl border-b border-white/20 shadow-sm flex items-center justify-between px-4 lg:px-gutter transition-all duration-300">
           <div className="flex items-center gap-6 flex-1">
             <h2 className="hidden md:block font-headline-md text-headline-md text-primary font-bold">Forensic Node v2.1</h2>
             <div className="relative w-96 max-w-full">

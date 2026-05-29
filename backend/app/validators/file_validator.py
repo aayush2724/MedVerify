@@ -1,6 +1,10 @@
 import os
 import uuid
-import magic
+try:
+    import magic
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
 import pypdfium2 as pdfium
 from PIL import Image
 from werkzeug.utils import secure_filename
@@ -20,10 +24,15 @@ class FileValidator:
                 details={"allowed": list(current_app.config['ALLOWED_EXTENSIONS'])}
             )
 
-        # 2. Check MIME type via magic bytes
+        # 2. Check MIME type via magic bytes (if available) or extension mapping
         header = file_storage.read(2048)
         file_storage.seek(0)
-        mime_type = magic.from_buffer(header, mime=True)
+        if HAS_MAGIC:
+            mime_type = magic.from_buffer(header, mime=True)
+        else:
+            # Fallback: infer MIME from extension
+            ext_to_mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'pdf': 'application/pdf'}
+            mime_type = ext_to_mime.get(ext, 'application/octet-stream')
         if mime_type not in current_app.config['ALLOWED_MIME_TYPES']:
             raise FileValidationError(
                 INVALID_FILE_FORMAT,

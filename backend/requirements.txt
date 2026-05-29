@@ -13,35 +13,36 @@ pydantic==2.13.4
 PyJWT==2.9.0
 python-dotenv==1.0.1
 alembic==1.13.2
-psycopg2-binary==2.9.9; python_version < "3.14"
-python-magic==0.4.27
+psycopg2-binary==2.9.9; sys_platform != 'win32'
+python-magic-bin==0.4.14; sys_platform == 'win32'
+python-magic==0.4.27; sys_platform != 'win32'
 
 # OCR
 pytesseract==0.3.13
 # Optional: google-cloud-vision==3.7.3
 
 # Image Processing
-opencv-python-headless==4.10.0.84
-Pillow==12.0.0
+opencv-python-headless>=4.10.0.84
+Pillow>=10.0.0
 
 # PDF Processing
-pypdfium2==5.2.0
+pypdfium2>=5.0.0
 
 # NLP / Text Processing
-spacy==3.7.6
+spacy>=3.8.0
 # After install run: python -m spacy download en_core_web_sm
 
 # Machine Learning
-scikit-learn==1.8.0
-joblib==1.4.2
-numpy==1.26.4
-pandas==2.3.3
+scikit-learn>=1.5.0
+joblib>=1.4.2
+numpy>=2.1.0
+pandas>=2.2.0
 
 # Logging
 python-json-logger==2.0.7
 
 # WSGI server (production)
-gunicorn==22.0.0
+gunicorn==22.0.0; sys_platform != 'win32'
 
 # Testing
 pytest==8.3.3

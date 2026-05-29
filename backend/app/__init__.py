@@ -15,6 +15,30 @@ limiter = Limiter(key_func=get_remote_address)
 jwt = JWTManager()
 bcrypt = Bcrypt()
 
+def _seed_default_users(app):
+    """Create default admin and verifier users if they don't exist."""
+    from .models import User
+    try:
+        if not User.query.filter_by(email='admin@certsentinel.dev').first():
+            admin = User(
+                email='admin@certsentinel.dev',
+                password_hash=bcrypt.generate_password_hash('admin123').decode('utf-8'),
+                role='admin'
+            )
+            db.session.add(admin)
+        if not User.query.filter_by(email='verifier@certsentinel.dev').first():
+            verifier = User(
+                email='verifier@certsentinel.dev',
+                password_hash=bcrypt.generate_password_hash('verifier123').decode('utf-8'),
+                role='verifier'
+            )
+            db.session.add(verifier)
+        db.session.commit()
+        app.logger.info('Default users verified/created.')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f'Could not seed default users: {e}')
+
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:
@@ -56,5 +80,10 @@ def create_app(config_class=DevelopmentConfig):
     app.register_blueprint(certificates_bp, url_prefix='/api/certificates')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+
+    # Initialize database tables and seed default admin user
+    with app.app_context():
+        db.create_all()
+        _seed_default_users(app)
 
     return app

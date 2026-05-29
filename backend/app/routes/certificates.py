@@ -1,6 +1,6 @@
 import os
 from flask import Blueprint, request, jsonify, current_app, send_file
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from ..database import db
 from ..validators.file_validator import FileValidator
 from ..services.verification_service import VerificationService
@@ -115,23 +115,25 @@ def get_task_status(task_id):
 @bp.route('', methods=['GET'])
 @jwt_required()
 def list_records():
-    user_id = get_jwt_identity()
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 20, type=int)
     service = get_verification_service()
     records = service.list_records(
-        user_id=user_id,
+        user_id=None,
         limit=limit,
         offset=(page-1)*limit
     )
-    return jsonify([{"id": str(r.id), "filename": r.filename, "status": r.status} for r in records]), 200
+    return jsonify([{"id": str(r.id), "filename": r.original_filename, "status": r.status, "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None} for r in records]), 200
 
 @bp.route('/<record_id>', methods=['GET'])
 @jwt_required()
 def get_record(record_id):
+    claims = get_jwt()
+    is_admin = claims.get('role') == 'admin'
     user_id = get_jwt_identity()
+    current_app.logger.info(f"DIAGNOSTIC: get_record ID: {record_id}, role: {claims.get('role')}, is_admin: {is_admin}, user_id: {user_id}")
     service = get_verification_service()
-    record = service.get_record(record_id, user_id=user_id)
+    record = service.get_record(record_id, user_id=None)
     return jsonify({
         "id": str(record.id),
         "status": record.status,
@@ -157,9 +159,8 @@ def get_stats():
 @bp.route('/<record_id>/export', methods=['GET'])
 @jwt_required()
 def export_record(record_id):
-    user_id = get_jwt_identity()
     service = get_verification_service()
-    record = service.get_record(record_id, user_id=user_id)
+    record = service.get_record(record_id, user_id=None)
     return jsonify({
         "report_id": str(record.id),
         "status": record.status,

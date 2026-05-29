@@ -17,7 +17,7 @@ class BaseConfig:
         "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'certsentinel_dev.db')}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {}
 
     # File uploads
     UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
@@ -50,6 +50,8 @@ class DevelopmentConfig(BaseConfig):
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-do-not-use-in-prod")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
     CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    RATELIMIT_STORAGE_URI = "memory://"
 
 class ProductionConfig(BaseConfig):
     DEBUG = False

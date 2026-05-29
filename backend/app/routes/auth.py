@@ -17,8 +17,9 @@ bp = Blueprint('auth', __name__)
 # Setup Redis for token blocklist
 try:
     jwt_redis_blocklist = redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+    jwt_redis_blocklist.ping()  # Test connection
 except Exception:
-    jwt_redis_blocklist = None 
+    jwt_redis_blocklist = None
 
 @bp.route('/register', methods=['POST'])
 def register():

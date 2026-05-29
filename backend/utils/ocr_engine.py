@@ -14,6 +14,21 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+# Auto-detect Tesseract on Windows
+if os.name == 'nt':
+    _win_tesseract_paths = [
+        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Tesseract-OCR', 'tesseract.exe'),
+    ]
+    for _path in _win_tesseract_paths:
+        if os.path.isfile(_path):
+            pytesseract.pytesseract.tesseract_cmd = _path
+            logger.info(f"Found Tesseract at: {_path}")
+            break
+
+
+
 class OCREngine:
     def __init__(
         self,

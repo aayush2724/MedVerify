@@ -61,7 +61,7 @@ export default function CommandCenter() {
 
       <Sidebar user={user} />
 
-      <header className="fixed top-0 right-0 left-72 h-20 z-40 bg-white/40 backdrop-blur-xl border-b border-white/20 shadow-sm flex items-center justify-between px-8">
+      <header className="fixed top-0 right-0 left-20 lg:left-72 h-20 z-40 bg-white/40 backdrop-blur-xl border-b border-white/20 shadow-sm flex items-center justify-between px-4 lg:px-8 transition-all duration-300">
         <div className="flex items-center gap-6 flex-1">
           <h2 className="hidden md:block font-headline-md text-headline-md text-primary font-bold">Command Center</h2>
           <div className="relative w-80">
@@ -77,7 +77,7 @@ export default function CommandCenter() {
         </div>
       </header>
 
-      <main className="ml-72 pt-28 px-8 pb-16 space-y-6">
+      <main className="ml-20 lg:ml-72 pt-28 px-4 lg:px-8 pb-16 space-y-6 transition-all duration-300">
 
         {/* Stats row */}
         <div className="grid grid-cols-4 gap-4">
@@ -252,41 +252,7 @@ export default function CommandCenter() {
           </div>
         </div>
 
-        {/* Network overview card */}
-        <div className="glass-card rounded-[32px] overflow-hidden relative min-h-[260px] inner-glow">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(177,156,217,0.18),transparent_40%),radial-gradient(circle_at_bottom_left,rgba(178,238,185,0.14),transparent_35%)]" />
-          <div className="relative z-10 p-8 h-full flex flex-col justify-between">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2 inline-block">System Status</span>
-                <h3 className="text-xl font-bold text-primary mb-2">Verification Pipeline Active</h3>
-                <p className="text-sm text-on-surface-variant/80 max-w-md">
-                  CertSentinel is running OCR + image forensics + ML classification on every submitted certificate in real-time.
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-primary">v1.0.0</p>
-                <p className="text-xs font-bold uppercase text-on-surface-variant/60">Model Version</p>
-              </div>
-            </div>
-            <div className="flex gap-4 mt-6 flex-wrap">
-              {[
-                { label: 'OCR Engine', value: 'Tesseract 5.5', icon: 'document_scanner' },
-                { label: 'Image Forensics', value: 'ELA + Noise + ORB', icon: 'image_search' },
-                { label: 'NLP', value: 'spaCy (lazy)', icon: 'psychology' },
-                { label: 'Classifier', value: 'Rule-based fallback', icon: 'model_training' },
-              ].map(t => (
-                <div key={t.label} className="bg-white/70 border border-white/80 rounded-2xl px-4 py-3 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary text-lg">{t.icon}</span>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-on-surface-variant/60">{t.label}</p>
-                    <p className="text-sm font-semibold text-on-surface">{t.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+
 
       </main>
     </div>

@@ -1,6 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
 export default function AnalysisEngine() {
+  const navigate = useNavigate();
   const user = {
     name: "Dr. Julian Vance",
     role: "Lead Administrator",
@@ -18,7 +20,7 @@ export default function AnalysisEngine() {
       <Sidebar user={user} />
 
       {/* Main Content */}
-      <main className="ml-72 p-gutter min-h-screen">
+      <main className="ml-20 lg:ml-72 p-4 lg:p-gutter min-h-screen transition-all duration-300">
         {/* TopAppBar */}
         <header className="flex items-center justify-between h-20 mb-8">
           <div className="flex-1 max-w-xl">
@@ -68,7 +70,7 @@ export default function AnalysisEngine() {
                 <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Drop Specimen Here</h3>
                 <p className="font-body-md text-on-surface-variant/60">Supports .PDF, .XRAY, .GENOM, and encrypted certificate bundles.</p>
               </div>
-              <button className="px-12 py-5 rounded-full bg-gradient-to-r from-primary-container to-primary text-white font-bold text-lg shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center gap-4 mx-auto border-t border-white/30 inner-glow">
+              <button onClick={() => navigate('/')} className="px-12 py-5 rounded-full bg-gradient-to-r from-primary-container to-primary text-white font-bold text-lg shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center gap-4 mx-auto border-t border-white/30 inner-glow">
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
                 <span>Ingest Certificate</span>
               </button>
