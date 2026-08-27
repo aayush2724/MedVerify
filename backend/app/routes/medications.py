@@ -16,6 +16,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from .. import limiter
 from ..database import db
+from ..timefmt import iso_utc
 from ..errors import FileValidationError, NotFoundError, VALIDATION_ERROR, RECORD_NOT_FOUND
 from ..repositories.audit_repository import AuditRepository
 from ..repositories.medication_repository import MedicationRepository
@@ -39,7 +40,7 @@ def _serialise(med) -> dict:
         "entry_source": med.entry_source,
         "notes": med.notes,
         "is_active": med.is_active,
-        "created_at": (med.created_at.isoformat() + 'Z') if med.created_at else None,
+        "created_at": iso_utc(med.created_at),
         "ingredients": [
             {
                 "name": i.ingredient_name,
@@ -260,7 +261,7 @@ def list_safety_checks():
             "medication_count": len(c.medication_snapshot or []),
             "finding_count": len(c.findings or []),
             "rule_engine_version": c.rule_engine_version,
-            "created_at": (c.created_at.isoformat() + 'Z') if c.created_at else None,
+            "created_at": iso_utc(c.created_at),
         }
         for c in checks
     ]), 200
@@ -285,7 +286,7 @@ def get_safety_check(check_id):
         "rule_engine_version": check.rule_engine_version,
         "processing_time_ms": check.processing_time_ms,
         "disclaimer": CONSULT_CAVEAT,
-        "created_at": (check.created_at.isoformat() + 'Z') if check.created_at else None,
+        "created_at": iso_utc(check.created_at),
     }), 200
 
 

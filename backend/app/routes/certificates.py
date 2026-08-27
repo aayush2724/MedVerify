@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from ..database import db
+from ..timefmt import iso_utc
 from ..validators.file_validator import FileValidator
 from ..services.verification_service import VerificationService
 from ..repositories.audit_repository import AuditRepository
@@ -131,7 +132,7 @@ def list_records():
         limit=limit,
         offset=(page-1)*limit
     )
-    return jsonify([{"id": str(r.id), "filename": r.original_filename, "status": r.status, "submitted_at": (r.submitted_at.isoformat() + 'Z') if r.submitted_at else None} for r in records]), 200
+    return jsonify([{"id": str(r.id), "filename": r.original_filename, "status": r.status, "submitted_at": iso_utc(r.submitted_at)} for r in records]), 200
 
 @bp.route('/<record_id>', methods=['GET'])
 @jwt_required()
@@ -268,5 +269,5 @@ def export_record(record_id):
         "processing_time_ms": record.processing_time_ms,
         "model_version": record.model_version,
         "filename": record.original_filename,
-        "submitted_at": (record.submitted_at.isoformat() + 'Z') if record.submitted_at else None,
+        "submitted_at": iso_utc(record.submitted_at),
     }), 200

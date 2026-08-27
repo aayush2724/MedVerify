@@ -18,11 +18,15 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      // Redirect to dashboard by default if no previous location
-      navigate(location.state?.from?.pathname || '/dashboard');
+      const data = await login(email, password);
+      // Return to the page that redirected here; otherwise land on the
+      // role's own console — /dashboard is admin-only and would bounce
+      // everyone else straight back out.
+      const from = location.state?.from?.pathname;
+      const roleHome = { admin: '/dashboard', verifier: '/analysis', viewer: '/vault' };
+      navigate(from || roleHome[data?.user?.role] || '/vault', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -123,7 +127,7 @@ export default function Login() {
             Secure forensic environment. Authorized access only.
           </p>
           <div className="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4 space-y-2 text-left font-body-sm">
-            <p className="font-bold text-text-secondary text-[11px] uppercase tracking-wider mb-1">Seeded Account Emails</p>
+            <p className="font-bold text-text-secondary text-[11px] uppercase tracking-wider mb-1">Demo Accounts</p>
             <div className="flex justify-between text-xs text-text-tertiary">
               <span>Admin:</span>
               <span className="font-bold text-primary">admin@medverify.dev</span>

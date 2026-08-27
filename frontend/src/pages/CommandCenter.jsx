@@ -61,26 +61,19 @@ export default function CommandCenter() {
 
       <Sidebar user={user} />
 
-      <header className="fixed top-0 right-0 left-20 lg:left-72 h-20 z-40 bg-white/40 backdrop-blur-xl border-b border-white/20 shadow-sm flex items-center justify-between px-4 lg:px-8 transition-all duration-300">
-        <div className="flex items-center gap-6 flex-1">
-          <h2 className="hidden md:block font-headline-md text-headline-md text-primary font-bold">Command Center</h2>
-          <div className="relative w-80">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/40">search</span>
-            <input className="w-full bg-white/20 border border-white/40 focus:ring-primary/20 focus:border-primary/40 rounded-full pl-11 pr-4 py-2 text-body-md outline-none" placeholder="Search records..." />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="p-2 hover:bg-white/30 rounded-full transition-colors relative">
-            <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
-            <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-white" />
-          </button>
-        </div>
-      </header>
+      <main className="ml-20 lg:ml-72 pt-10 px-4 lg:px-8 pb-16 space-y-6 transition-all duration-300">
 
-      <main className="ml-20 lg:ml-72 pt-28 px-4 lg:px-8 pb-16 space-y-6 transition-all duration-300">
+        {/* Page header */}
+        <div className="mb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary/60 mb-2">Administration</p>
+          <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-on-surface">Command Center</h1>
+          <p className="text-on-surface-variant/70 mt-2">
+            Platform-wide verification metrics and classifier configuration.
+          </p>
+        </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Total Verified', value: loadingStats ? '—' : adminStats?.total_verifications ?? 0, icon: 'fact_check', color: 'text-primary' },
             { label: 'Genuine', value: loadingStats ? '—' : adminStats?.by_status?.GENUINE ?? 0, icon: 'verified', color: 'text-emerald-600' },

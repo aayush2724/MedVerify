@@ -3,6 +3,7 @@ from flask_jwt_extended import get_jwt, jwt_required
 from sqlalchemy import func
 
 from ..database import db
+from ..timefmt import iso_utc
 from ..models import AuditLog, VerificationRecord
 from .. import settings as runtime_settings
 
@@ -34,7 +35,7 @@ def audit_logs():
             "confidence_threshold_used": log.confidence_threshold_used,
             "model_version": log.model_version,
             "details": log.details or {},
-            "created_at": log.created_at.isoformat(),
+            "created_at": iso_utc(log.created_at),
         }
         for log in logs
     ])
@@ -56,7 +57,7 @@ def records():
             "confidence_threshold_used": row.confidence_threshold_used,
             "model_version": row.model_version,
             "processing_time_ms": row.processing_time_ms,
-            "submitted_at": (row.submitted_at.isoformat() + 'Z') if row.submitted_at else None,
+            "submitted_at": iso_utc(row.submitted_at),
         }
         for row in rows
     ])

@@ -182,8 +182,6 @@ export default function MyMedications() {
 }
 
 function MedicationRow({ med, isEditing, onEdit, onCancelEdit, onSave, onRemove }) {
-  const [units, setUnits] = useState(med.units_per_dose);
-  const [perDay, setPerDay] = useState(med.doses_per_day);
 
   const dailyTotals = med.ingredients
     .filter((i) => i.strength_mg)
@@ -230,33 +228,7 @@ function MedicationRow({ med, isEditing, onEdit, onCancelEdit, onSave, onRemove 
           )}
 
           {isEditing ? (
-            <div className="mt-4 flex flex-wrap items-end gap-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60">
-                Units per dose
-                <input
-                  type="number" min="0.25" step="0.25" value={units}
-                  onChange={(e) => setUnits(e.target.value)}
-                  className="mt-1 block w-28 rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm font-normal text-on-surface normal-case tracking-normal"
-                />
-              </label>
-              <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60">
-                Doses per day
-                <input
-                  type="number" min="0.25" step="0.25" value={perDay}
-                  onChange={(e) => setPerDay(e.target.value)}
-                  className="mt-1 block w-28 rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm font-normal text-on-surface normal-case tracking-normal"
-                />
-              </label>
-              <button
-                onClick={() => onSave(med.id, Number(units), Number(perDay))}
-                className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-bold"
-              >
-                Save
-              </button>
-              <button onClick={onCancelEdit} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant">
-                Cancel
-              </button>
-            </div>
+            <DoseEditForm med={med} onSave={onSave} onCancel={onCancelEdit} />
           ) : (
             <p className="mt-3 text-sm text-on-surface-variant">
               {med.units_per_dose} per dose · {med.doses_per_day} time
@@ -285,6 +257,43 @@ function MedicationRow({ med, isEditing, onEdit, onCancelEdit, onSave, onRemove 
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/** Mounted only while editing, so its draft state is always seeded fresh
+    from the saved values — a cancelled edit leaves nothing stale behind. */
+function DoseEditForm({ med, onSave, onCancel }) {
+  const [units, setUnits] = useState(med.units_per_dose);
+  const [perDay, setPerDay] = useState(med.doses_per_day);
+
+  return (
+    <div className="mt-4 flex flex-wrap items-end gap-3">
+      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60">
+        Units per dose
+        <input
+          type="number" min="0.25" step="0.25" value={units}
+          onChange={(e) => setUnits(e.target.value)}
+          className="mt-1 block w-28 rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm font-normal text-on-surface normal-case tracking-normal"
+        />
+      </label>
+      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/60">
+        Doses per day
+        <input
+          type="number" min="0.25" step="0.25" value={perDay}
+          onChange={(e) => setPerDay(e.target.value)}
+          className="mt-1 block w-28 rounded-xl border border-outline-variant bg-white px-3 py-2 text-sm font-normal text-on-surface normal-case tracking-normal"
+        />
+      </label>
+      <button
+        onClick={() => onSave(med.id, Number(units), Number(perDay))}
+        className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-bold"
+      >
+        Save
+      </button>
+      <button onClick={onCancel} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant">
+        Cancel
+      </button>
+    </div>
   );
 }
 

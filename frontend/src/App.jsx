@@ -7,7 +7,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 const Home = lazy(() => import('./pages/Home'));
 const Report = lazy(() => import('./pages/Report'));
 const Login = lazy(() => import('./pages/Login'));
-const History = lazy(() => import('./pages/History'));
 const CommandCenter = lazy(() => import('./pages/CommandCenter'));
 const AnalysisEngine = lazy(() => import('./pages/AnalysisEngine'));
 const VerificationVault = lazy(() => import('./pages/VerificationVault'));
@@ -84,15 +83,6 @@ function AnimatedRoutes() {
             <motion.div {...pageVariants}>
               <Suspense fallback={<PageLoader />}>
                 <VerificationVault />
-              </Suspense>
-            </motion.div>
-          </ProtectedRoute>
-        } />
-        <Route path="/history" element={
-          <ProtectedRoute requiredRole="admin">
-            <motion.div {...pageVariants}>
-              <Suspense fallback={<PageLoader />}>
-                <History />
               </Suspense>
             </motion.div>
           </ProtectedRoute>

@@ -72,21 +72,11 @@ export default function AnalysisEngine() {
       <Sidebar user={user} />
 
       <main className="ml-20 lg:ml-72 p-4 lg:p-gutter min-h-screen transition-all duration-300">
-        {/* TopAppBar */}
-        <header className="flex items-center justify-between h-20 mb-8">
-          <div className="flex-1 max-w-xl" />
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="font-label-sm text-on-surface">MedVerify Suite</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-bold uppercase">Pro</span>
-            </div>
-          </div>
-        </header>
-
         {/* Page Header */}
-        <div className="mb-10 text-left">
-          <h2 className="font-display-lg text-display-lg text-primary tracking-tight">Analysis Engine</h2>
-          <p className="font-body-lg text-on-surface-variant/70">Upload a certificate or document to verify its authenticity.</p>
+        <div className="mt-6 mb-10 text-left">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary/60 mb-2">Document Forensics</p>
+          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight text-on-surface">Analysis Engine</h2>
+          <p className="text-on-surface-variant/70 mt-2">Upload a certificate or document to verify its authenticity.</p>
         </div>
 
         {/* Upload Card */}

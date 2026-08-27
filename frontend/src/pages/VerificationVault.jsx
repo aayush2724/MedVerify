@@ -79,6 +79,12 @@ export default function VerificationVault() {
     document.body.removeChild(link);
   };
 
+  const statusCounts = records.reduce((acc, r) => {
+    const key = (r.status || 'GENUINE').toUpperCase();
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
   const getShortId = (id) => {
     if (!id) return '—';
     if (id.length <= 12) return id;
@@ -140,8 +146,8 @@ export default function VerificationVault() {
           </div>
           <div className="flex items-center gap-4 shrink-0">
             <div className="text-right">
-              <p className="text-xs font-bold text-primary">MedVerify Suite</p>
-              <p className="text-[10px] text-on-surface-variant/50 font-semibold tracking-wider uppercase">v4.2.0-STABLE</p>
+              <p className="text-xs font-bold text-primary">Verification Vault</p>
+              <p className="text-[10px] text-on-surface-variant/50 font-semibold tracking-wider uppercase">Records Ledger</p>
             </div>
           </div>
         </header>
@@ -154,24 +160,34 @@ export default function VerificationVault() {
             {/* Vault Capacity Card - Responsive Layout */}
             <div className="glass-card inner-glow rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between overflow-hidden relative text-left gap-6">
               <div className="z-10 w-full md:flex-1">
-                <h2 className="text-lg font-bold text-primary mb-1">Vault Ledger Capacity</h2>
+                <h2 className="text-lg font-bold text-primary mb-1">Verification Vault</h2>
                 <p className="text-xs text-on-surface-variant/70 mb-5 max-w-xl">
-                  Distributed ledger indexing of all medical certifications. Verifiers and compliance nodes validation database is fully operational.
+                  Every verification run is recorded here with its verdict, confidence and full audit trail.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
                   <div>
                     <p className="text-2xl font-bold text-primary leading-none">
-                      {loading ? '—' : totalRecords}
+                      {loading ? '—' : records.length}
                     </p>
-                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Total Indexed Logs</p>
+                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Total Records</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-secondary leading-none">99.9%</p>
-                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Security Integrity Score</p>
+                    <p className="text-2xl font-bold text-secondary leading-none">
+                      {loading ? '—' : statusCounts.GENUINE || 0}
+                    </p>
+                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Genuine</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary leading-none">AES-256</p>
-                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Encryption Method</p>
+                    <p className="text-2xl font-bold text-amber-600 leading-none">
+                      {loading ? '—' : statusCounts.SUSPICIOUS || 0}
+                    </p>
+                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Suspicious</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-error leading-none">
+                      {loading ? '—' : statusCounts.FAKE || 0}
+                    </p>
+                    <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-wider mt-1">Fake / Altered</p>
                   </div>
                 </div>
               </div>
@@ -311,26 +327,6 @@ export default function VerificationVault() {
             </div>
           </section>
 
-          {/* Bottom Highlights - Responsive Grid */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-card-gap">
-            {[
-              { label: 'Integrity Logs', val: totalRecords, sub: 'Indexed entries', icon: 'security', color: 'text-primary' },
-              { label: 'Avg. Scan Speed', val: '0.24s', sub: 'Per validation check', icon: 'speed', color: 'text-secondary' },
-              { label: 'Active Service', val: '100%', sub: 'Cloud validation nodes', icon: 'hub', color: 'text-primary' },
-              { label: 'Tamper Rate', val: '0.00%', sub: 'Auto-detected errors', icon: 'rule_folder', color: 'text-red-500' },
-            ].map((stat, i) => (
-              <div key={i} className="glass-card inner-glow rounded-xl p-4 text-left">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/50 border border-white/60">
-                    <span className={`material-symbols-outlined text-sm ${stat.color}`}>{stat.icon}</span>
-                  </div>
-                  <p className="text-[11px] font-bold text-on-surface">{stat.label}</p>
-                </div>
-                <p className={`text-[18px] font-bold ${stat.color}`}>{stat.val}</p>
-                <p className="text-[8px] text-on-surface-variant/60 uppercase font-bold tracking-widest leading-none mt-0.5">{stat.sub}</p>
-              </div>
-            ))}
-          </section>
 
         </div>
       </main>

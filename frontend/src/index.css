@@ -192,3 +192,67 @@ body {
 }
 
 
+
+
+/* ─────────────────────────────────────────────────────────────
+   Global polish
+   ───────────────────────────────────────────────────────────── */
+
+/* Scrollbar — thin, tinted to the palette instead of browser gray */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 85, 140, 0.25) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(103, 85, 140, 0.25);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(103, 85, 140, 0.4); }
+
+/* Text selection in brand color */
+::selection {
+  background: rgba(177, 156, 217, 0.35);
+  color: #1a1c1c;
+}
+
+/* Keyboard focus — visible ring for accessibility, only on focus-visible */
+:focus-visible {
+  outline: 2px solid rgba(103, 85, 140, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+input:focus-visible, button:focus-visible { outline-offset: 1px; }
+
+/* Number inputs: hide spinners (dose fields set their own affordance) */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+
+/* Material Symbols: avoid layout shift before the icon font loads */
+.material-symbols-outlined {
+  font-display: block;
+  user-select: none;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print: reports must not inherit the sidebar offset or glass chrome */
+@media print {
+  main { margin-left: 0 !important; padding: 0 !important; }
+  body { background: #fff !important; }
+  .glass-card {
+    background: #fff !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    border-color: #e5e5e5 !important;
+  }
+}

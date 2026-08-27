@@ -43,11 +43,17 @@ export default function Profile() {
     setAvatar(url);
   };
 
-  const presetAvatars = [
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuCx9pEksSfepdb9zDTtfwPbbT7c_OplpA2ekaqkQHhzXAYiHSjppHiqphVSN2h3kDrQRbdWjgCohEZLOYh7KHfDJgIs_XOD_GbShfSOpy9a3O4T5rwt1rXgMSGbGkTUC6-Tdhc7plITdtolD_Yxp8DM7h0oYmCDdAWC_jry_s-jGvd2_8GuTn1au8FYpO1Ozezn_w4M12-COZndGo5CMrso_T9VjXOFZO_oWe6ZdvqWLWjTFkJboEp_O_5Z7yAeoBiPoynKgaB1nASq', // Vance
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuDCtxurpFAiHFIk1wgdu08am-9cLnd_aDJyIUeBWfxE1sKl6qtcwjwtJUhq-A5n01bMAvUGEidYo_kWmvvTl_v2zcxoDEw9r5Kb3pdm8Ux9jLMMpurbCe7dOPapTSTaEoPzcvX8FApJEe7ktfqsFY3HTSdMjyoHGaGDbe4WCbzN6Q1XHYl0JJajBbze4oIphQ57g5i8AyaGCI_wR37k3XjuHTmZyTNCqrOnJw8J3gOvkkO4rHGSriQeFjmbeGePvZrJAMay_xb9iQ-G', // Sarah Jenkins
-    'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="%23e8e0f0"/%3E%3Ccircle cx="20" cy="16" r="7" fill="%237c5cbf"/%3E%3Cellipse cx="20" cy="34" rx="12" ry="8" fill="%237c5cbf"/%3E%3C/svg%3E', // default purple avatar
+  // Neutral inline-SVG avatars only — no external image hosts to break, and
+  // no AI-generated faces implying a real person.
+  const AVATAR_COLORS = [
+    ['%23e8e0f0', '%237c5cbf'],  // lavender
+    ['%23d9efdc', '%23326940'],  // mint
+    ['%23fde8d9', '%23b45309'],  // amber
+    ['%23dbeafe', '%231d4ed8'],  // blue
   ];
+  const presetAvatars = AVATAR_COLORS.map(([bg, fg]) =>
+    `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"%3E%3Ccircle cx="20" cy="20" r="20" fill="${bg}"/%3E%3Ccircle cx="20" cy="16" r="7" fill="${fg}"/%3E%3Cellipse cx="20" cy="34" rx="12" ry="8" fill="${fg}"/%3E%3C/svg%3E`
+  );
 
   return (
     <div className="text-on-surface font-body-md overflow-x-hidden min-h-screen relative">

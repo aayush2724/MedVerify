@@ -55,7 +55,9 @@ export default function SafetyReport() {
   const { user } = useAuth();
 
   const [result, setResult] = useState(location.state?.result || null);
-  const [loading, setLoading] = useState(!location.state?.result);
+  // Only a load with an id to fetch starts in the loading state; a direct
+  // visit with neither router state nor an id renders the empty state at once.
+  const [loading, setLoading] = useState(() => !location.state?.result && Boolean(id));
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export default function SafetyReport() {
         <Sidebar user={user} />
         <main className="ml-20 lg:ml-72 p-6 lg:p-container-padding">
           <div className="max-w-3xl mx-auto rounded-2xl border border-error/20 bg-error-container/30 p-6 text-error">
-            {error || 'No result to show.'}
+            {error || 'No safety check to show. Run one from your medication list.'}
           </div>
         </main>
       </div>
