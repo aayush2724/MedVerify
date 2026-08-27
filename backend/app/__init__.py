@@ -42,6 +42,34 @@ def _seed_default_users(app):
         db.session.rollback()
         app.logger.warning(f'Could not seed default users: {e}')
 
+def _seed_ingredient_limits(app):
+    """Load the curated maximum-daily-dose table used by Module 2.
+
+    Idempotent and re-runnable: rows are upserted by ingredient key so editing
+    `app/data/ingredient_limits.py` and restarting is enough to publish a
+    corrected limit. Without this table the safety engine reports "no published
+    limit on file" rather than guessing, so a failure here degrades the feature
+    instead of producing wrong numbers.
+    """
+    from .models import IngredientLimit
+    from .data.ingredient_limits import INGREDIENT_LIMITS
+
+    try:
+        existing = {row.ingredient_key: row for row in IngredientLimit.query.all()}
+        for entry in INGREDIENT_LIMITS:
+            row = existing.get(entry["ingredient_key"])
+            if row is None:
+                db.session.add(IngredientLimit(**entry))
+            else:
+                for field, value in entry.items():
+                    setattr(row, field, value)
+        db.session.commit()
+        app.logger.info("Ingredient dose limits seeded (%d entries).", len(INGREDIENT_LIMITS))
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning("Could not seed ingredient limits: %s", e)
+
+
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:
@@ -89,14 +117,17 @@ def create_app(config_class=DevelopmentConfig):
     from .routes.certificates import bp as certificates_bp
     from .routes.auth import bp as auth_bp
     from .routes.admin import bp as admin_bp
-    
+    from .routes.medications import bp as medications_bp
+
     app.register_blueprint(certificates_bp, url_prefix='/api/certificates')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(medications_bp, url_prefix='/api/medications')
 
-    # Initialize database tables and seed default admin user
+    # Initialize database tables and seed reference data
     with app.app_context():
         db.create_all()
         _seed_default_users(app)
+        _seed_ingredient_limits(app)
 
     return app

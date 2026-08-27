@@ -8,6 +8,7 @@ const ALL_NAV_ITEMS = [
   { path: '/dashboard', label: 'Command Center', icon: 'dashboard', roles: ['admin'] },
   { path: '/analysis', label: 'Analysis Engine', icon: 'query_stats', roles: ['admin', 'verifier'] },
   { path: '/vault', label: 'Verification Vault', icon: 'verified_user', roles: ['admin', 'verifier', 'viewer'] },
+  { path: '/medications', label: 'Medication Safety', icon: 'pill', roles: ['admin', 'verifier', 'viewer'] },
 ];
 
 export default function Sidebar({ user }) {
@@ -56,7 +57,9 @@ export default function Sidebar({ user }) {
   };
 
   const currentUser = getProfile(rawUser);
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) =>
+    location.pathname === path ||
+    (path !== '/' && location.pathname.startsWith(`${path}/`));
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) => !item.roles || item.roles.includes(currentUser.role)

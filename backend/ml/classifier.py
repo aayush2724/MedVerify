@@ -56,8 +56,16 @@ class CertificateClassifier:
             confidence = self._fallback_score(features)
 
         reasons = features.get("flags", [])
+
+        # Only signals that are direct evidence of editing may override the
+        # score. Substrate-noise variation was previously in this list, but it
+        # was measured to fire identically on genuine and spliced documents
+        # (see ImageAnalyzer._noise_inconsistency), which meant every single
+        # submission was forced to FAKE. Advisory flags now contribute through
+        # the score instead of short-circuiting it.
         has_critical_visual_edit = any(
-            ('ELA' in r) or ('Noise' in r) or ('copy-move' in r) or ('software' in r)
+            (('ELA' in r) or ('copy-move' in r) or ('software' in r))
+            and 'advisory only' not in r
             for r in reasons
         )
         has_future_date = any('Future date' in r for r in reasons)

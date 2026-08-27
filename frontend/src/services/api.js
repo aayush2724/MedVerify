@@ -54,6 +54,27 @@ export const authAPI = {
   updateProfile: (data) => api.put('/api/auth/update-profile', data),
 };
 
+// Module 2 — Medication Safety Check (consumer-facing, informational only)
+export const medicationAPI = {
+  search: (q, limit = 15) =>
+    api.get('/api/medications/search', { params: { q, limit } }),
+  getConcept: (rxcui) => api.get(`/api/medications/concept/${rxcui}`),
+  list: () => api.get('/api/medications'),
+  add: (data) => api.post('/api/medications', data),
+  update: (id, data) => api.put(`/api/medications/${id}`, data),
+  remove: (id) => api.delete(`/api/medications/${id}`),
+  runSafetyCheck: () => api.post('/api/medications/safety-check'),
+  listSafetyChecks: () => api.get('/api/medications/safety-checks'),
+  getSafetyCheck: (id) => api.get(`/api/medications/safety-checks/${id}`),
+  scan: (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return api.post('/api/medications/scan', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 export const adminAPI = {
   getThresholds: () => api.get('/api/admin/thresholds'),
   updateThresholds: (data) => api.put('/api/admin/thresholds', data),

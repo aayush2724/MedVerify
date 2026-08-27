@@ -13,6 +13,10 @@ const AnalysisEngine = lazy(() => import('./pages/AnalysisEngine'));
 const VerificationVault = lazy(() => import('./pages/VerificationVault'));
 const ForensicReport = lazy(() => import('./pages/ForensicReport'));
 const Profile = lazy(() => import('./pages/Profile'));
+// Module 2 — Medication Safety Check
+const MyMedications = lazy(() => import('./pages/MyMedications'));
+const AddMedication = lazy(() => import('./pages/AddMedication'));
+const SafetyReport = lazy(() => import('./pages/SafetyReport'));
 
 const pageVariants = {
   initial: { opacity: 0 },
@@ -89,6 +93,44 @@ function AnimatedRoutes() {
             <motion.div {...pageVariants}>
               <Suspense fallback={<PageLoader />}>
                 <History />
+              </Suspense>
+            </motion.div>
+          </ProtectedRoute>
+        } />
+        {/* Module 2 — available to every signed-in role: a medication list is
+            personal, not privileged. */}
+        <Route path="/medications" element={
+          <ProtectedRoute requiredRole="viewer">
+            <motion.div {...pageVariants}>
+              <Suspense fallback={<PageLoader />}>
+                <MyMedications />
+              </Suspense>
+            </motion.div>
+          </ProtectedRoute>
+        } />
+        <Route path="/medications/add" element={
+          <ProtectedRoute requiredRole="viewer">
+            <motion.div {...pageVariants}>
+              <Suspense fallback={<PageLoader />}>
+                <AddMedication />
+              </Suspense>
+            </motion.div>
+          </ProtectedRoute>
+        } />
+        <Route path="/medications/report" element={
+          <ProtectedRoute requiredRole="viewer">
+            <motion.div {...pageVariants}>
+              <Suspense fallback={<PageLoader />}>
+                <SafetyReport />
+              </Suspense>
+            </motion.div>
+          </ProtectedRoute>
+        } />
+        <Route path="/medications/report/:id" element={
+          <ProtectedRoute requiredRole="viewer">
+            <motion.div {...pageVariants}>
+              <Suspense fallback={<PageLoader />}>
+                <SafetyReport />
               </Suspense>
             </motion.div>
           </ProtectedRoute>

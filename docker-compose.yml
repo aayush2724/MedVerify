@@ -8,9 +8,9 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: certsentinel
+      POSTGRES_USER: medverify
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
-      POSTGRES_DB: certsentinel
+      POSTGRES_DB: medverify
     ports:
       - "5432:5432"
 
@@ -23,7 +23,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - JWT_BLOCKLIST_REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://certsentinel:${POSTGRES_PASSWORD:-change_me}@db:5432/certsentinel
+      - DATABASE_URL=postgresql://medverify:${POSTGRES_PASSWORD:-change_me}@db:5432/medverify
     depends_on:
       - redis
       - db
@@ -36,7 +36,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - JWT_BLOCKLIST_REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://certsentinel:${POSTGRES_PASSWORD:-change_me}@db:5432/certsentinel
+      - DATABASE_URL=postgresql://medverify:${POSTGRES_PASSWORD:-change_me}@db:5432/medverify
     depends_on:
       - redis
       - db

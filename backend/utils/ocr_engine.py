@@ -1,6 +1,16 @@
 """
 OCR Engine
-Wraps Tesseract OCR with optional Google Vision API fallback.
+Text extraction with a three-tier engine chain, tried in order:
+
+    Google Vision (opt-in)  ->  Tesseract  ->  RapidOCR (ONNX)
+
+RapidOCR matters because it is pip-installable and needs no system binary. On a
+host without Tesseract, Tesseract's failure used to be swallowed and this class
+returned an empty string, which silently drove every document's text score to
+zero and made the whole pipeline classify genuine documents as fake. The chain
+now falls through to a working engine instead, and `last_engine` records which
+one produced the text so a result stays explainable.
+
 Supports English and Hindi (eng+hin) for Indian medical certificates.
 """
 import logging
@@ -29,6 +39,25 @@ if os.name == 'nt':
 
 
 
+# RapidOCR loads ~15 MB of ONNX models, so build it once per process.
+_rapid_ocr = None
+_RAPID_AVAILABLE = None
+
+
+def _get_rapid_ocr():
+    global _rapid_ocr, _RAPID_AVAILABLE
+    if _RAPID_AVAILABLE is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR  # noqa: PLC0415
+            _rapid_ocr = RapidOCR()
+            _RAPID_AVAILABLE = True
+            logger.info("RapidOCR engine initialised.")
+        except Exception as exc:
+            logger.warning("RapidOCR unavailable: %s", exc)
+            _RAPID_AVAILABLE = False
+    return _rapid_ocr
+
+
 class OCREngine:
     def __init__(
         self,
@@ -40,19 +69,62 @@ class OCREngine:
         self.use_google_vision = use_google_vision and bool(
             os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         )
+        self.last_engine = None
 
     def extract_text(self, image: np.ndarray) -> str:
-        """Extract text from a preprocessed OpenCV image."""
+        """Extract text from a preprocessed OpenCV image.
+
+        Walks the engine chain until one returns usable text. An engine that
+        returns only whitespace counts as a failure, not a result — otherwise a
+        half-working engine would mask a working one further down the chain.
+        """
+        self.last_engine = None
+        errors = []
+
         if self.use_google_vision:
             try:
-                return self._google_vision_ocr(image)
+                text = self._google_vision_ocr(image)
+                if text and text.strip():
+                    self.last_engine = "google_vision"
+                    return text
             except Exception as exc:
-                logger.warning("Google Vision OCR failed (%s), falling back to Tesseract.", exc)
+                errors.append(f"google_vision: {exc}")
+                logger.warning("Google Vision OCR failed (%s), trying Tesseract.", exc)
+
         try:
-            return self._tesseract_ocr(image)
+            text = self._tesseract_ocr(image)
+            if text and text.strip():
+                self.last_engine = "tesseract"
+                return text
+            errors.append("tesseract: returned no text")
         except Exception as exc:
-            logger.warning("Tesseract OCR unavailable (%s); returning empty text.", exc)
+            errors.append(f"tesseract: {exc}")
+            logger.info("Tesseract unavailable (%s), falling back to RapidOCR.", exc)
+
+        try:
+            text = self._rapid_ocr(image)
+            if text and text.strip():
+                self.last_engine = "rapidocr"
+                return text
+            errors.append("rapidocr: returned no text")
+        except Exception as exc:
+            errors.append(f"rapidocr: {exc}")
+            logger.warning("RapidOCR failed: %s", exc)
+
+        logger.error("All OCR engines failed or returned nothing: %s", "; ".join(errors))
+        return ""
+
+    def _rapid_ocr(self, image: np.ndarray) -> str:
+        """RapidOCR (PaddleOCR models via ONNX) — no system binary required."""
+        engine = _get_rapid_ocr()
+        if engine is None:
+            raise RuntimeError("RapidOCR is not installed")
+
+        result, _ = engine(image)
+        if not result:
             return ""
+        # Each row is [box, text, confidence]; keep reading order as returned.
+        return "\n".join(row[1] for row in result if len(row) > 1 and row[1]).strip()
 
     def _tesseract_ocr(self, image: np.ndarray) -> str:
         """Tesseract OCR with binarisation pre-step."""

@@ -11,6 +11,11 @@ import os
 from typing import Dict, Any
 
 
+# Set from measurement (see _noise_inconsistency): ordinary single-source
+# documents cluster around 2.4, so anything under this is unremarkable.
+NOISE_ADVISORY_THRESHOLD = 4.0
+
+
 class ImageAnalyzer:
     def _convert_pdf_to_temp_img(self, pdf_path: str) -> str:
         """Convert first page of PDF to a temporary PNG for visual forensic checks."""
@@ -51,12 +56,14 @@ class ImageAnalyzer:
             except Exception as e:
                 results['ela_error'] = str(e)
 
-            # 2. Noise Inconsistency
+            # 2. Noise Inconsistency — advisory only, see _noise_inconsistency.
             try:
                 noise_score = self._noise_inconsistency(analysis_path)
                 results['noise_inconsistency_score'] = noise_score
-                if noise_score > 0.3:
-                    flags.append(f'Noise inconsistency detected (score: {noise_score:.2f})')
+                if noise_score > NOISE_ADVISORY_THRESHOLD:
+                    flags.append(
+                        f'Unusual substrate noise variation (score: {noise_score:.2f}) — advisory only'
+                    )
             except Exception as e:
                 results['noise_error'] = str(e)
 
@@ -128,7 +135,28 @@ class ImageAnalyzer:
         return ela_score, len(large_regions)
 
     def _noise_inconsistency(self, filepath: str) -> float:
-        """Divide image into blocks, compare noise levels — edits create noise discontinuities."""
+        """Coefficient of variation of block-level Laplacian noise.
+
+        CALIBRATION NOTE — READ BEFORE TRUSTING THIS SIGNAL.
+        The premise is that a spliced region carries different sensor noise
+        than its surroundings. On *documents* that premise largely fails: the
+        statistic is dominated by the contrast between blank paper (near-zero
+        variance) and inked text (high variance), not by splicing. Measured on
+        a clean render, a scan-simulated copy, and a deliberately spliced copy
+        of the same certificate, this returns 2.41 / 2.41 / 2.37 — no
+        separation whatsoever.
+
+        The original 0.3 threshold therefore fired on every document ever
+        submitted, and because the classifier treated a noise flag as proof of
+        editing, *every* document was forced to FAKE. The threshold below is
+        set from those measurements so ordinary documents no longer trip it,
+        and the flag is worded and weighted as advisory.
+
+        The value is still recorded as a feature: it is a legitimate input for
+        a trained model that can weigh it against the others, which is the
+        proper way to use a weak signal. It is not evidence of tampering on
+        its own.
+        """
         ext = os.path.splitext(filepath)[1].lower()
         if ext == '.pdf':
             return 0.0
@@ -215,9 +243,17 @@ class ImageAnalyzer:
             pass
         return flags
 
+    # Advisory flags describe weak or unvalidated signals and must not carry the
+    # same weight as direct evidence of editing.
+    _ADVISORY_DEDUCTION = 0.05
+    _EVIDENCE_DEDUCTION = 0.15
+
     def _compute_image_score(self, flags: list) -> float:
         """Returns 0-1 score. Higher = more likely genuine."""
         score = 1.0
-        per_flag_deduction = 0.15
-        score -= len(flags) * per_flag_deduction
+        for flag in flags:
+            score -= (
+                self._ADVISORY_DEDUCTION if 'advisory only' in flag
+                else self._EVIDENCE_DEDUCTION
+            )
         return max(0.0, round(score, 2))
