@@ -7,6 +7,7 @@ const ALL_NAV_ITEMS = [
   { path: '/analysis', label: 'Analysis Engine', icon: 'query_stats', roles: ['admin', 'verifier'] },
   { path: '/vault', label: 'Verification Vault', icon: 'verified_user', roles: ['admin', 'verifier', 'viewer'] },
   { path: '/medications', label: 'Medication Safety', icon: 'pill', roles: ['admin', 'verifier', 'viewer'] },
+  { path: '/prescription-check', label: 'Prescription Check', icon: 'clinical_notes', roles: ['admin', 'verifier', 'viewer'] },
 ];
 
 const ROLE_LABELS = { admin: 'System Admin', verifier: 'Verifier', viewer: 'Viewer' };

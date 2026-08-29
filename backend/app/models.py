@@ -264,10 +264,30 @@ class SafetyCheck(db.Model):
     __tablename__ = 'safety_checks'
     __table_args__ = (
         db.Index('ix_safety_checks_user_created', 'user_id', 'created_at'),
+        db.Index('ix_safety_checks_verification_record', 'verification_record_id'),
     )
 
     id = db.Column(db.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = db.Column(db.UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+
+    # Where the checked list came from. 'list' is the user's own curated list;
+    # 'prescription' is a list read off a document by OCR and never confirmed
+    # by hand. The two carry very different confidence and must stay
+    # distinguishable long after the check was run.
+    source = db.Column(
+        db.Enum('list', 'prescription', name='safety_check_source'),
+        nullable=False, default='list', server_default='list',
+    )
+    # Set when this check was produced by the Phase 3 combined pipeline, so a
+    # report can show the forensics verdict and the safety findings for one
+    # document side by side. SET NULL on delete: losing the certificate must
+    # not silently delete the safety history attached to it.
+    verification_record_id = db.Column(
+        db.UUID(as_uuid=True),
+        db.ForeignKey('verification_records.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+
     medication_snapshot = db.Column(JSONType, nullable=False)   # what was checked, verbatim
     findings = db.Column(JSONType, nullable=False)              # list of sourced findings
     severity_summary = db.Column(JSONType, nullable=True)       # {"high": 1, "moderate": 0, ...}

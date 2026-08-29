@@ -37,8 +37,14 @@ CONCEPT_TTL = timedelta(days=30)
 CACHE_TTL = timedelta(days=7)
 REQUEST_TIMEOUT = 8
 
-# Branded/product term types worth showing a consumer, most specific first.
-_PRODUCT_TTYS = ("SBD", "SCD", "BPCK", "GPCK")
+# Product term types worth showing a consumer, in preference order. Single
+# products first, packs (BPCK/GPCK) last: a pack bundles several products, so
+# it is rarely what someone means by one line on a prescription or one entry on
+# their list. `search_products` walks this tuple in order rather than the order
+# RxNav happens to return its groups in — RxNav puts pack groups first, which
+# without this filled the whole result page with cold-and-flu packs before a
+# plain "acetaminophen 500 MG Oral Tablet" was ever reached.
+_PRODUCT_TTYS = ("SCD", "SBD", "BPCK", "GPCK")
 
 # Mass units RxNorm uses, normalised to milligrams. Volume/activity units
 # (ML, UNT, %) intentionally map to None — a cumulative-dose comparison against
@@ -75,6 +81,28 @@ def normalise_ingredient_key(name: str) -> str:
         key,
     )
     return re.sub(r"\s+", " ", key).strip()
+
+
+def _product_rank(name: str, term_key: str):
+    """Order products within one term type, from the name alone.
+
+    RxNorm names a combination product by joining its ingredients with "/", so
+    counting slashes orders by ingredient count without a second API call.
+
+    This matters because RxNav returns its concepts in its own order and a
+    `limit` truncates whatever arrives first. A search for "acetaminophen"
+    otherwise returns eight oxycodone and cold-and-flu combinations and never
+    reaches the plain paracetamol tablet — which is both a poor autocomplete
+    for someone adding their own medication, and how the prescription pipeline
+    ended up resolving a plain paracetamol line to a combination product and
+    reporting drugs the patient was not taking.
+    """
+    lowered = (name or "").lower()
+    return (
+        lowered.count("/"),                              # fewest ingredients first
+        0 if term_key and lowered.startswith(term_key) else 1,
+        len(lowered),                                    # then the plainest name
+    )
 
 
 class DrugDataService:
@@ -149,11 +177,24 @@ class DrugDataService:
         seen = set()
 
         data = self._get_json(f"{RXNAV_BASE}/drugs.json", {"name": term}, "rxnav") or {}
+
+        # Index the response by term type first, then walk _PRODUCT_TTYS in our
+        # own preference order. Consuming the groups in response order instead
+        # lets whichever type RxNav returns first exhaust `limit`.
+        by_tty: Dict[str, List[dict]] = {}
         for group in (data.get("drugGroup") or {}).get("conceptGroup") or []:
-            tty = group.get("tty")
-            if tty not in _PRODUCT_TTYS:
-                continue
-            for prop in group.get("conceptProperties") or []:
+            if group.get("tty") in _PRODUCT_TTYS:
+                by_tty.setdefault(group["tty"], []).extend(
+                    group.get("conceptProperties") or []
+                )
+
+        term_key = term.lower()
+        for tty in _PRODUCT_TTYS:
+            group = sorted(
+                by_tty.get(tty, []),
+                key=lambda prop: _product_rank(prop.get("name"), term_key),
+            )
+            for prop in group:
                 rxcui = prop.get("rxcui")
                 if not rxcui or rxcui in seen:
                     continue
@@ -382,3 +423,82 @@ class DrugDataService:
             "excerpt": text or None,
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    # ------------------------------------------------------------------
+    # openFDA interaction prose (Phase 2)
+    # ------------------------------------------------------------------
+
+    # Sections of an openFDA label that carry interaction warnings, in
+    # descending order of how specific they are. A prescription label puts them
+    # in `drug_interactions`; an OTC label usually puts the same warning under
+    # "ask a doctor or pharmacist before use if you are taking...". Scanning all
+    # of them is deliberate — an OTC-only search would silently miss the
+    # warnings that matter most to a consumer. Each section is kept separate so
+    # a finding can cite the exact one it read.
+    _INTERACTION_SECTIONS = (
+        "drug_interactions",
+        "drug_and_or_laboratory_test_interactions",
+        "ask_a_doctor_or_pharmacist_before_use",
+        "do_not_use",
+        "warnings",
+    )
+
+    def fetch_interaction_sections(self, ingredient_name: str) -> Optional[Dict[str, Any]]:
+        """Verbatim interaction prose from an openFDA label, by section.
+
+        Returns the raw text only. Deciding whether any of it applies to the
+        user's list is the rule engine's job — this service supplies sourced
+        facts and makes no safety judgement of its own.
+
+        Returns None when no label could be found, and a payload with an empty
+        `sections` list when a label exists but publishes no interaction prose.
+        Those two cases mean different things to the caller, so they are not
+        collapsed into one.
+        """
+        if not ingredient_name:
+            return None
+
+        data = self._get_json(
+            OPENFDA_LABEL_URL,
+            {"search": f'openfda.generic_name:"{ingredient_name}"', "limit": 3},
+            "openfda",
+        ) or {}
+
+        results = data.get("results") or []
+        if not results:
+            return None
+
+        # Prefer the first label that actually publishes interaction prose;
+        # fall back to the first label so "found nothing" stays distinguishable
+        # from "found no label at all".
+        chosen, chosen_sections = results[0], []
+        for label in results:
+            sections = self._extract_sections(label)
+            if sections:
+                chosen, chosen_sections = label, sections
+                break
+
+        openfda = chosen.get("openfda") or {}
+        set_id = chosen.get("set_id")
+        return {
+            "source": "openFDA drug label",
+            "label_id": set_id,
+            "url": (
+                f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={set_id}"
+                if set_id else None
+            ),
+            "brand_name": (openfda.get("brand_name") or [None])[0],
+            "generic_name": (openfda.get("generic_name") or [None])[0],
+            "sections": chosen_sections,
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @classmethod
+    def _extract_sections(cls, label: Dict[str, Any]) -> List[Dict[str, str]]:
+        """Flatten the interaction-bearing sections of one openFDA label."""
+        sections = []
+        for field in cls._INTERACTION_SECTIONS:
+            text = " ".join(label.get(field) or []).strip()
+            if text:
+                sections.append({"section": field, "text": text})
+        return sections

@@ -1,0 +1,24 @@
+# Used only by the optional `tls` profile in docker-compose.prod.yml.
+# Caddy obtains and renews a Let's Encrypt certificate for $DOMAIN on its own.
+#
+# With this running, set HTTP_PORT to something other than 80 in .env so the
+# frontend container stops competing for the port Caddy needs.
+
+{$DOMAIN} {
+	tls {$EMAIL}
+
+	encode gzip
+
+	# 16 MB, matching Flask's MAX_CONTENT_LENGTH and the nginx client_max_body_size.
+	request_body {
+		max_size 16MB
+	}
+
+	reverse_proxy frontend:80 {
+		# The forensics and prescription endpoints are slow by nature.
+		transport http {
+			read_timeout 180s
+			write_timeout 180s
+		}
+	}
+}

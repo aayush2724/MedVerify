@@ -10,10 +10,13 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from app import create_app
-from app.config import config_by_name
+from app.config import DevelopmentConfig, config_by_name
 
+# The fallback has to be a config *class*. Falling back to the string
+# "development" would hand `app.config.from_object` a name it cannot resolve,
+# so an unrecognised FLASK_ENV would fail at boot instead of degrading to dev.
 env = os.environ.get("FLASK_ENV", "development")
-app = create_app(config_by_name.get(env, "development"))
+app = create_app(config_by_name.get(env, DevelopmentConfig))
 
 if __name__ == "__main__":
     # debug=True is acceptable for local dev only.

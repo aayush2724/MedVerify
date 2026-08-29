@@ -1,0 +1,37 @@
+# Build-context hygiene for the backend image, which builds from this
+# directory because `app/errors.py` imports the root-level `shared/` package.
+
+# Virtualenvs — Linux-incompatible binaries and hundreds of megabytes.
+.venv/
+backend/.venv/
+frontend/.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node — never needed by the backend image, and enormous.
+frontend/node_modules/
+frontend/dist/
+
+# Local secrets must never enter an image layer.
+.env
+.env.*
+!.env.example
+
+# Local runtime state. `uploads` is a named volume in production; copying a
+# developer's uploads into the image would ship other people's documents.
+backend/uploads/
+backend/instance/
+*.db
+*.sqlite3
+
+.git/
+.gitignore
+.github/

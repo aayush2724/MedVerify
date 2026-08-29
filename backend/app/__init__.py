@@ -118,15 +118,23 @@ def create_app(config_class=DevelopmentConfig):
     from .routes.auth import bp as auth_bp
     from .routes.admin import bp as admin_bp
     from .routes.medications import bp as medications_bp
+    from .routes.pipeline import bp as pipeline_bp
+    from .routes.health import bp as health_bp
 
     app.register_blueprint(certificates_bp, url_prefix='/api/certificates')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(medications_bp, url_prefix='/api/medications')
+    app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
+    app.register_blueprint(health_bp, url_prefix='/api/health')
 
     # Initialize database tables and seed reference data
     with app.app_context():
-        db.create_all()
+        # Alembic owns the schema in production; create_all() there would race
+        # the migration and could resurrect a table a migration had dropped.
+        # In development and tests it is the fastest way to a working database.
+        if app.config.get("AUTO_CREATE_TABLES", True):
+            db.create_all()
         _seed_default_users(app)
         _seed_ingredient_limits(app)
 

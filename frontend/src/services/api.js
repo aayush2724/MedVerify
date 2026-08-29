@@ -75,6 +75,22 @@ export const medicationAPI = {
   },
 };
 
+// Module 2, Phase 3 — one upload checked by both modules at once.
+export const pipelineAPI = {
+  analyse: (file, onUploadProgress) => {
+    const formData = new FormData();
+    formData.append('document', file);
+    return api.post('/api/pipeline/analyse', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Forensics plus OCR plus RxNorm resolution on one document runs well
+      // past the client default; a timeout here would look like a failure.
+      timeout: 120000,
+      onUploadProgress,
+    });
+  },
+  getReport: (recordId) => api.get(`/api/pipeline/${recordId}`),
+};
+
 export const adminAPI = {
   getThresholds: () => api.get('/api/admin/thresholds'),
   updateThresholds: (data) => api.put('/api/admin/thresholds', data),

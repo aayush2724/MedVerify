@@ -1,0 +1,20 @@
+# Build context hygiene.
+#
+# `.env` is the important line. Vite inlines VITE_* variables at build time, so
+# a local `.env` holding VITE_API_URL=http://localhost:5000 inside the build
+# context would hard-code localhost into the production bundle and the deployed
+# site would call the visitor's own machine for its API.
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+.vite/
+
+npm-debug.log*
+yarn-error.log*
+
+.git/
+.gitignore
+*.md

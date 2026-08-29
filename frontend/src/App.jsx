@@ -16,6 +16,8 @@ const Profile = lazy(() => import('./pages/Profile'));
 const MyMedications = lazy(() => import('./pages/MyMedications'));
 const AddMedication = lazy(() => import('./pages/AddMedication'));
 const SafetyReport = lazy(() => import('./pages/SafetyReport'));
+// Module 2, Phase 3 — both modules over one document
+const PrescriptionCheck = lazy(() => import('./pages/PrescriptionCheck'));
 
 const pageVariants = {
   initial: { opacity: 0 },
@@ -121,6 +123,18 @@ function AnimatedRoutes() {
             <motion.div {...pageVariants}>
               <Suspense fallback={<PageLoader />}>
                 <SafetyReport />
+              </Suspense>
+            </motion.div>
+          </ProtectedRoute>
+        } />
+        {/* Phase 3 reads a medication list off the document, so it is scoped
+            like Module 2 (any signed-in user, own data only) rather than like
+            Module 1's verifier-only upload. */}
+        <Route path="/prescription-check" element={
+          <ProtectedRoute requiredRole="viewer">
+            <motion.div {...pageVariants}>
+              <Suspense fallback={<PageLoader />}>
+                <PrescriptionCheck />
               </Suspense>
             </motion.div>
           </ProtectedRoute>

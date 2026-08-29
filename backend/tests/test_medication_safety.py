@@ -46,6 +46,49 @@ def user(app):
     return u
 
 
+@pytest.fixture(autouse=True)
+def offline_interactions(monkeypatch):
+    """Keep the interaction rule off the network by default.
+
+    RULE-INT-01 fetches an openFDA label per ingredient, so without this every
+    test with two ingredients would make live calls and the suite would depend
+    on openFDA being reachable. Returning None models "no label found", which
+    the rule reports as a RULE-GAP-04 coverage gap. Tests that exercise
+    interactions install their own label text with `_stub_interactions`.
+    """
+    monkeypatch.setattr(
+        DrugDataService, "fetch_interaction_sections", lambda self, name: None
+    )
+
+
+def _stub_interactions(monkeypatch, sections_by_ingredient):
+    """Serve fixed openFDA label prose in place of the network.
+
+    Keys are normalised ingredient keys, so a stub for "warfarin" also serves
+    the RxNorm name "warfarin sodium". A key absent from the mapping models
+    "no label found", so gap behaviour stays testable.
+    """
+    def _fetch(self, ingredient_name):
+        sections = sections_by_ingredient.get(normalise_ingredient_key(ingredient_name))
+        if sections is None:
+            return None
+        return {
+            "source": "openFDA drug label",
+            "label_id": f"set-{normalise_ingredient_key(ingredient_name)}",
+            "url": "https://dailymed.example.test/label",
+            "brand_name": None,
+            "generic_name": ingredient_name,
+            "sections": sections,
+            "retrieved_at": "2026-01-01T00:00:00+00:00",
+        }
+
+    monkeypatch.setattr(DrugDataService, "fetch_interaction_sections", _fetch)
+
+
+def _section(name, text):
+    return {"section": name, "text": text}
+
+
 def _product(rxcui, name, ingredients):
     """Seed a cached product so no network call is needed."""
     concept = DrugConcept(rxcui=rxcui, name=name, tty="SBD", is_branded=True)
@@ -273,7 +316,7 @@ class TestSafetyConstraints:
         stored = service.get_check(result["check_id"], str(user.id))
         assert stored is not None
         assert stored.sources_used
-        assert stored.rule_engine_version == "rules-v1"
+        assert stored.rule_engine_version == "rules-v2"
 
     def test_one_user_cannot_read_another_users_check(self, app, user):
         other = User(email=f"other-{uuid.uuid4().hex[:6]}@test.local",
@@ -290,8 +333,339 @@ class TestSafetyConstraints:
 
 
 # ---------------------------------------------------------------------------
+# RULE-INT-01 — drug-drug interactions read from openFDA label text (Phase 2)
+# ---------------------------------------------------------------------------
+
+class TestInteractions:
+    """The rule's claim is "this label says X", never "these drugs interact".
+
+    Every assertion here is about whether the tool faithfully reports label
+    text and labels its own confidence, because that is the only claim it is
+    entitled to make once RxNav's interaction API went away.
+    """
+
+    def _warfarin_and(self, user, other_name, other_mg=200.0):
+        w = _product("1", "Warfarin 5 MG", [("warfarin sodium", 5.0)])
+        o = _product("2", f"{other_name} {other_mg:g} MG", [(other_name, other_mg)])
+        _add(user, w, "Warfarin 5 MG")
+        _add(user, o, f"{other_name} {other_mg:g} MG")
+
+    def test_label_naming_the_other_drug_outright_is_flagged(self, app, user, monkeypatch):
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section(
+                "drug_interactions",
+                "Bleeding risk is increased. Do not take with aspirin unless directed by a doctor.",
+            )],
+            "aspirin": [_section("warnings", "Take with food to reduce stomach upset.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hits = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"]
+
+        assert len(hits) == 1
+        assert hits[0]["evidence"]["match_type"] == "ingredient"
+        assert hits[0]["evidence"]["matched_term"] == "aspirin"
+        assert sorted(hits[0]["evidence"]["ingredient_keys"]) == ["aspirin", "warfarin"]
+
+    def test_do_not_take_wording_escalates_to_high(self, app, user, monkeypatch):
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section(
+                "drug_interactions", "Do not take with aspirin."
+            )],
+            "aspirin": [_section("warnings", "Take with food.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hit = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"][0]
+
+        assert hit["severity"] == "high"
+        assert hit["evidence"]["contraindication_wording"] is True
+        assert result["highest_severity"] == "high"
+
+    def test_general_caution_stays_moderate(self, app, user, monkeypatch):
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section(
+                "drug_interactions",
+                "Tell your doctor if you are taking aspirin, as monitoring may be needed.",
+            )],
+            "aspirin": [_section("warnings", "Take with food.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hit = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"][0]
+
+        assert hit["severity"] == "moderate"
+        assert hit["evidence"]["contraindication_wording"] is False
+
+    def test_class_mention_is_flagged_and_named_as_a_class(self, app, user, monkeypatch):
+        """A label saying "NSAIDs" must still catch ibuprofen — and say it did so by class."""
+        self._warfarin_and(user, "ibuprofen", 200.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section(
+                "ask_a_doctor_or_pharmacist_before_use",
+                "Ask a doctor or pharmacist before use if you are taking an NSAID.",
+            )],
+            "ibuprofen": [_section("warnings", "Take with food.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hit = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"][0]
+
+        assert hit["evidence"]["match_type"] == "class"
+        assert hit["evidence"]["matched_term"] == "nsaid"
+        assert "class" in hit["message"].lower()
+
+    def test_composition_sentence_is_not_reported_as_an_interaction(self, app, user, monkeypatch):
+        """A combination product reciting its own contents is not a warning.
+
+        Without this guard, RULE-DUP-01's territory (shared ingredients) would
+        be double-reported as an interaction between the two ingredients.
+        """
+        a = _product("1", "NightCold", [("acetaminophen", 325.0), ("diphenhydramine", 25.0)])
+        _add(user, a, "NightCold")
+        _stub_interactions(monkeypatch, {
+            "acetaminophen": [_section(
+                "warnings",
+                "Each caplet contains acetaminophen 325 mg and diphenhydramine 25 mg.",
+            )],
+            "diphenhydramine": [_section(
+                "warnings",
+                "This product contains diphenhydramine and acetaminophen.",
+            )],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        assert not [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"]
+
+    def test_a_pair_is_reported_once_even_when_both_labels_warn(self, app, user, monkeypatch):
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section("drug_interactions", "Increased bleeding risk with aspirin.")],
+            "aspirin": [_section("drug_interactions", "Increased bleeding risk with warfarin.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hits = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"]
+
+        assert len(hits) == 1
+        assert hits[0]["evidence"]["mention_count"] == 2
+
+    def test_silent_labels_produce_no_interaction_and_no_gap(self, app, user, monkeypatch):
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section("drug_interactions", "No clinically significant issues noted.")],
+            "aspirin": [_section("drug_interactions", "No clinically significant issues noted.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        rule_ids = {f["rule_id"] for f in result["findings"]}
+
+        assert "RULE-INT-01" not in rule_ids
+        assert "RULE-GAP-04" not in rule_ids, "a label that was read is not a coverage gap"
+
+    def test_unreadable_label_is_reported_as_a_gap(self, app, user, monkeypatch):
+        """Silence about an ingredient we could not check must never look clean."""
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section("drug_interactions", "Nothing of note.")],
+            # aspirin absent -> no label found
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        gaps = [f for f in result["findings"] if f["rule_id"] == "RULE-GAP-04"]
+
+        assert len(gaps) == 1
+        assert gaps[0]["severity"] == "info"
+        assert "aspirin" in gaps[0]["evidence"]["no_label_found"]
+
+    def test_label_without_interaction_text_is_a_distinct_gap(self, app, user, monkeypatch):
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section("drug_interactions", "Nothing of note.")],
+            "aspirin": [],   # label exists, publishes no interaction prose
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        gaps = [f for f in result["findings"] if f["rule_id"] == "RULE-GAP-04"][0]
+
+        assert "aspirin" in gaps["evidence"]["label_without_interaction_text"]
+        assert gaps["evidence"]["no_label_found"] == []
+
+    def test_single_ingredient_has_no_pair_so_no_interaction_gap(self, app, user):
+        a = _product("1", "Tylenol 500 MG", [("acetaminophen", 500.0)])
+        _add(user, a, "Tylenol 500 MG")
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        rule_ids = {f["rule_id"] for f in result["findings"]}
+
+        assert "RULE-INT-01" not in rule_ids
+        assert "RULE-GAP-04" not in rule_ids
+
+    def test_finding_quotes_the_label_verbatim_and_cites_the_section(self, app, user, monkeypatch):
+        sentence = "Do not take with aspirin without asking a doctor."
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section("drug_interactions", sentence)],
+            "aspirin": [_section("warnings", "Take with food.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hit = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"][0]
+        citation = hit["citations"][0]
+
+        assert citation["source"] == "openFDA drug label"
+        assert citation["excerpt"] == sentence
+        assert citation["section"] == "drug_interactions"
+        assert sentence in hit["message"]
+
+    def test_finding_disclaims_a_clinical_severity_grade(self, app, user, monkeypatch):
+        """The severity is derived from label wording; the finding has to say so."""
+        self._warfarin_and(user, "aspirin", 81.0)
+        _stub_interactions(monkeypatch, {
+            "warfarin": [_section("drug_interactions", "Do not take with aspirin.")],
+            "aspirin": [_section("warnings", "Take with food.")],
+        })
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        hit = [f for f in result["findings"] if f["rule_id"] == "RULE-INT-01"][0]
+
+        assert "not a clinical severity rating" in hit["message"]
+        assert hit["caveat"] == CONSULT_CAVEAT
+
+    def test_ingredient_cap_is_reported_rather_than_applied_silently(self, app, user, monkeypatch):
+        from app.services.medication_safety_service import MAX_INTERACTION_INGREDIENTS
+
+        over = MAX_INTERACTION_INGREDIENTS + 1
+        ingredients = [(f"drug{i:02d}", 10.0) for i in range(1, over + 1)]
+        a = _product("1", "Polypharmacy Pack", ingredients)
+        _add(user, a, "Polypharmacy Pack")
+        _stub_interactions(monkeypatch, {})
+
+        result = MedicationSafetyService(db.session).run_check(str(user.id), persist=False)
+        capped = [f for f in result["findings"] if f["rule_id"] == "RULE-GAP-05"]
+
+        assert len(capped) == 1
+        assert capped[0]["evidence"]["not_scanned"] == [f"drug{over:02d}"]
+
+
+class TestInteractionScanning:
+    """Unit-level checks on the text scanner behind RULE-INT-01."""
+
+    def _target(self, key, name=None):
+        return {"ingredient_key": key, "ingredient_name": name or key}
+
+    def test_word_boundaries_prevent_substring_false_positives(self):
+        sections = [_section("drug_interactions", "Contains no codeineberry extract.")]
+        assert MedicationSafetyService._scan_sections(sections, self._target("codeine")) == []
+
+    def test_longest_class_term_wins(self):
+        sections = [_section(
+            "drug_interactions",
+            "Avoid use with a central nervous system depressant of any kind.",
+        )]
+        hits = MedicationSafetyService._scan_sections(sections, self._target("oxycodone"))
+        assert hits[0]["matched_term"] == "central nervous system depressant"
+
+    def test_contraindication_is_scoped_to_the_matching_sentence(self):
+        """Strong wording elsewhere on a label must not escalate an unrelated sentence."""
+        sections = [_section(
+            "warnings",
+            "Do not use if you are allergic to this product. "
+            "Tell your doctor if you take warfarin.",
+        )]
+        hits = MedicationSafetyService._scan_sections(sections, self._target("warfarin"))
+        assert len(hits) == 1
+        assert hits[0]["contraindication"] is False
+
+    def test_excerpt_is_capped(self):
+        from app.services.medication_safety_service import MAX_EXCERPT_CHARS
+
+        sections = [_section("drug_interactions", "warfarin " + ("x" * 900) + ".")]
+        hits = MedicationSafetyService._scan_sections(sections, self._target("warfarin"))
+        assert len(hits[0]["sentence"]) == MAX_EXCERPT_CHARS
+
+
+# ---------------------------------------------------------------------------
 # Drug data parsing
 # ---------------------------------------------------------------------------
+
+class TestProductSearchOrdering:
+    """RxNav returns its concept groups in its own order, not ours."""
+
+    def _response(self):
+        # Shape of a real RxNav /drugs.json reply: pack groups arrive first.
+        return {"drugGroup": {"conceptGroup": [
+            {"tty": "GPCK", "conceptProperties": [
+                {"rxcui": f"pk{i}", "name": f"{{1 (acetaminophen 500 MG / ...)}} Pack {i}"}
+                for i in range(8)
+            ]},
+            {"tty": "SCD", "conceptProperties": [
+                {"rxcui": "scd1", "name": "acetaminophen 500 MG Oral Tablet"},
+            ]},
+            {"tty": "SBD", "conceptProperties": [
+                {"rxcui": "sbd1", "name": "acetaminophen 500 MG Oral Tablet [Tylenol]"},
+            ]},
+        ]}}
+
+    def test_single_products_outrank_packs_regardless_of_response_order(self, app, monkeypatch):
+        """A pack bundles several drugs; it must not crowd out the plain tablet.
+
+        Consuming the response in RxNav's order let eight packs fill the result
+        page, so a plain paracetamol search offered only cold-and-flu bundles —
+        and the prescription pipeline then resolved to one, importing drugs the
+        patient was not taking.
+        """
+        svc = DrugDataService(db.session)
+        monkeypatch.setattr(
+            DrugDataService, "_get_json",
+            lambda self, url, params, provider, ttl=None: self and self._response_stub,
+        )
+        svc._response_stub = self._response()
+
+        results = svc.search_products("acetaminophen", limit=5)
+
+        assert results[0]["tty"] == "SCD"
+        assert results[1]["tty"] == "SBD"
+        assert [r["tty"] for r in results[:2]] == ["SCD", "SBD"]
+
+    def test_plain_products_outrank_combinations_within_a_term_type(self, app, monkeypatch):
+        """RxNav returns combinations first; `limit` then hides the plain drug.
+
+        A consumer searching "acetaminophen" was offered eight oxycodone and
+        cold-and-flu combinations and never the plain tablet.
+        """
+        svc = DrugDataService(db.session)
+        response = {"drugGroup": {"conceptGroup": [{"tty": "SCD", "conceptProperties": [
+            {"rxcui": "c1", "name": "acetaminophen 500 MG / oxycodone hydrochloride 5 MG Oral Tablet"},
+            {"rxcui": "c2", "name": "acetaminophen 500 MG / methionine 250 MG Oral Tablet"},
+            {"rxcui": "c3", "name": "acetaminophen 500 MG / chlorpheniramine 2 MG / phenylephrine 5 MG Oral Tablet"},
+            {"rxcui": "plain", "name": "acetaminophen 500 MG Oral Tablet"},
+        ]}]}}
+        monkeypatch.setattr(
+            DrugDataService, "_get_json",
+            lambda self, url, params, provider, ttl=None: response,
+        )
+
+        results = svc.search_products("acetaminophen", limit=2)
+
+        assert results[0]["rxcui"] == "plain", [r["name"] for r in results]
+
+    def test_packs_are_still_offered_once_single_products_run_out(self, app, monkeypatch):
+        svc = DrugDataService(db.session)
+        monkeypatch.setattr(
+            DrugDataService, "_get_json",
+            lambda self, url, params, provider, ttl=None: self and self._response_stub,
+        )
+        svc._response_stub = self._response()
+
+        results = svc.search_products("acetaminophen", limit=5)
+
+        assert len(results) == 5
+        assert any(r["tty"] == "GPCK" for r in results), "packs should fill the remainder"
+
 
 class TestDrugDataParsing:
     @pytest.mark.parametrize("name,expected_mg", [

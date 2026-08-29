@@ -1,37 +1,33 @@
-# Build stage
+# ---- Build stage ----------------------------------------------------------
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy source code
 COPY . .
 
-# Build the app
+# Left empty on purpose. Vite inlines VITE_* at build time, so baking a host in
+# here would pin the bundle to one deployment. With it empty, the client falls
+# back to `window.location.origin` and talks to whatever origin served it —
+# which nginx below proxies through to the backend.
+ARG VITE_API_URL=""
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine
+# ---- Runtime stage --------------------------------------------------------
+FROM nginx:1.27-alpine
 
-WORKDIR /app
+# Serving through nginx rather than `serve` gives us the /api reverse proxy, so
+# the browser sees one origin and no CORS preflight is involved at all.
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Install a simple HTTP server to serve static files
-RUN npm install -g serve
+EXPOSE 80
 
-# Copy built app from builder
-COPY --from=builder /app/dist ./dist
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
 
-# Non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
-
-USER nextjs
-
-EXPOSE 3000
-
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["nginx", "-g", "daemon off;"]

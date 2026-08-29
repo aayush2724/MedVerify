@@ -7,6 +7,11 @@ load_dotenv()
 BASE_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 
 class BaseConfig:
+    # `db.create_all()` on boot is a development convenience. Production runs
+    # `alembic upgrade head` from the entrypoint instead, so the schema has one
+    # owner and a migration cannot be silently undone by a model import.
+    AUTO_CREATE_TABLES = True
+
     # Security
     SECRET_KEY = os.environ.get("SECRET_KEY")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
@@ -58,6 +63,14 @@ class DevelopmentConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
+    AUTO_CREATE_TABLES = False
+    # In-memory rate limiting is per-process. With several gunicorn workers each
+    # would keep its own counters, so the effective limit becomes N times what
+    # was configured and resets on every worker recycle. Redis makes the limit
+    # mean what it says across the whole deployment.
+    RATELIMIT_STORAGE_URI = os.environ.get(
+        "RATELIMIT_STORAGE_URI", BaseConfig.REDIS_URL
+    )
     JWT_BLOCKLIST_REQUIRED = os.environ.get("JWT_BLOCKLIST_REQUIRED", "true").lower() in {"1", "true", "yes"}
 
 class TestingConfig(BaseConfig):

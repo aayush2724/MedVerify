@@ -22,10 +22,12 @@ DESIGN CONSTRAINTS (enforced, not just documented)
 """
 
 import logging
+import re
 import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+from ..data.interaction_classes import CONTRAINDICATION_PHRASES, INGREDIENT_CLASSES
 from ..database import db
 from ..models import SafetyCheck, UserMedication
 from ..repositories.audit_repository import AuditRepository
@@ -33,7 +35,7 @@ from .drug_data_service import DrugDataService
 
 logger = logging.getLogger(__name__)
 
-RULE_ENGINE_VERSION = "rules-v1"
+RULE_ENGINE_VERSION = "rules-v2"
 
 SEVERITY_ORDER = {"none": 0, "info": 1, "moderate": 2, "high": 3}
 
@@ -49,6 +51,30 @@ CONSULT_CAVEAT = (
 # than waiting for the limit to be crossed outright.
 APPROACHING_LIMIT_RATIO = 0.8
 
+# Phase 2 — interaction scanning.
+#
+# One openFDA label lookup happens per distinct ingredient, so a very long list
+# is capped. The cap is reported through RULE-GAP-05 rather than applied
+# silently: a list that was only partly scanned must never read as fully
+# scanned.
+MAX_INTERACTION_INGREDIENTS = 25
+
+# Longest verbatim label sentence quoted back to the user in a finding.
+MAX_EXCERPT_CHARS = 400
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+# A combination product's own warnings recite what is inside it ("each caplet
+# contains acetaminophen"). Read literally that looks like drug A's label
+# naming drug B, when it is really the label describing itself. Sentences that
+# are plainly compositional are skipped so co-formulation is not misreported as
+# an interaction — RULE-DUP-01 is what covers shared ingredients.
+_COMPOSITION_RE = re.compile(
+    r"\b(active ingredient|inactive ingredient|each (tablet|caplet|capsule|"
+    r"softgel|dose|teaspoon|packet)|this product contains|contains\s+\d)",
+    re.IGNORECASE,
+)
+
 
 class MedicationSafetyService:
     def __init__(self, db_session=None):
@@ -62,9 +88,7 @@ class MedicationSafetyService:
 
     def run_check(self, user_id: str, ip_address: str = None,
                   persist: bool = True) -> Dict[str, Any]:
-        """Run every Phase-1 rule over the user's active medication list."""
-        start = time.time()
-
+        """Run every rule over the user's saved medication list."""
         # JWT identities arrive as strings; the column is a native UUID.
         user_uuid = self._as_uuid(user_id)
         medications = (
@@ -74,13 +98,40 @@ class MedicationSafetyService:
             .all()
         ) if user_uuid else []
 
+        return self.run_check_on(
+            medications, user_id, ip_address=ip_address, persist=persist,
+        )
+
+    def run_check_on(self, medications: List[Any], user_id: str,
+                     ip_address: str = None, persist: bool = True,
+                     source: str = "list",
+                     verification_record_id=None,
+                     audit_action: str = "MEDICATION_SAFETY_CHECK",
+                     provenance: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Run every rule over an explicit medication list.
+
+        Split out from `run_check` so Phase 3 can check a list read off a
+        prescription without first writing it to the user's saved list. The
+        rules themselves are identical either way — what changes is where the
+        list came from, which travels with the result as `source` and
+        `provenance` so a reader can tell a confirmed list from an OCR guess.
+
+        `medications` only needs to *quack* like `UserMedication`: the rules
+        read `id`, `rxcui`, `display_name`, `units_per_dose`, `doses_per_day`,
+        `schedule_note`, `entry_source` and `concept`.
+        """
+        start = time.time()
+
         snapshot = [self._snapshot(m) for m in medications]
         ingredient_totals = self._aggregate_ingredients(medications)
 
         findings: List[Dict[str, Any]] = []
+        interaction_findings, interaction_coverage = self._rule_interactions(ingredient_totals)
         findings.extend(self._rule_duplicate_ingredient(ingredient_totals))
         findings.extend(self._rule_cumulative_dose(ingredient_totals))
+        findings.extend(interaction_findings)
         findings.extend(self._rule_unassessable(ingredient_totals))
+        findings.extend(self._rule_interaction_gaps(interaction_coverage))
 
         findings.sort(key=lambda f: -SEVERITY_ORDER.get(f["severity"], 0))
 
@@ -105,22 +156,25 @@ class MedicationSafetyService:
             "rule_engine_version": RULE_ENGINE_VERSION,
             "processing_time_ms": elapsed_ms,
             "disclaimer": CONSULT_CAVEAT,
+            "source": source,
+            "provenance": provenance,
         }
 
         if persist:
-            check = self._persist(user_id, result)
+            check = self._persist(user_id, result, verification_record_id)
             result["check_id"] = str(check.id) if check else None
             # The audit trail records which data sources backed this result, so
             # a finding stays explainable long after the caches have rolled.
             self.audit.log(
                 user_id=user_id,
-                action='MEDICATION_SAFETY_CHECK',
+                action=audit_action,
                 resource_type='SafetyCheck',
                 resource_id=check.id if check else None,
                 ip_address=ip_address,
                 model_version=RULE_ENGINE_VERSION,
                 details={
                     "medication_count": len(snapshot),
+                    "source": source,
                     "highest_severity": highest,
                     "severity_summary": severity_summary,
                     "sources_used": sources_used,
@@ -487,10 +541,13 @@ class MedicationSafetyService:
                 })
         return sources
 
-    def _persist(self, user_id: str, result: Dict[str, Any]) -> Optional[SafetyCheck]:
+    def _persist(self, user_id: str, result: Dict[str, Any],
+                 verification_record_id=None) -> Optional[SafetyCheck]:
         try:
             check = SafetyCheck(
                 user_id=self._as_uuid(user_id),
+                verification_record_id=verification_record_id,
+                source=result.get("source", "list"),
                 medication_snapshot=result["medications_checked"],
                 findings=result["findings"],
                 severity_summary=result["severity_summary"],
@@ -525,3 +582,275 @@ class MedicationSafetyService:
             .filter_by(id=check_uuid, user_id=user_uuid)
             .first()
         )
+
+    # ------------------------------------------------------------------
+    # Phase 2 — drug–drug interactions (RULE-INT-01, RULE-GAP-04/05)
+    # ------------------------------------------------------------------
+
+    def _rule_interactions(self, totals: Dict[str, Dict]):
+        """RULE-INT-01 — one drug's own label warns about another on the list.
+
+        NLM retired the RxNav interaction API in January 2024, so there is no
+        longer a public endpoint that answers "do A and B interact?". What is
+        still published is the label text itself. This rule therefore does the
+        only honest thing available: it reads each ingredient's openFDA label
+        and reports, verbatim, where that label warns about something else the
+        user is taking. The claim it makes is "this label says X", which is
+        checkable, rather than "these drugs interact", which would be a
+        clinical judgement this module does not make.
+
+        Returns `(findings, coverage)`; coverage drives the gap rules so an
+        ingredient whose label could not be read is reported rather than
+        quietly dropped.
+        """
+        buckets = {
+            key: bucket for key, bucket in totals.items()
+            if key != "__unmatched__" and not bucket.get("unmatched")
+            and bucket.get("ingredient_name")
+        }
+        coverage = {"scanned": [], "no_label": [], "no_interaction_text": [], "skipped": []}
+
+        # An interaction needs two sides. One ingredient is not a quiet pass —
+        # there is simply no pair to check, and the gap rules stay silent too.
+        if len(buckets) < 2:
+            return [], coverage
+
+        ordered = sorted(buckets.values(), key=lambda b: b["ingredient_key"])
+        scanned = ordered[:MAX_INTERACTION_INGREDIENTS]
+        coverage["skipped"] = [b["ingredient_name"] for b in ordered[MAX_INTERACTION_INGREDIENTS:]]
+
+        labels: Dict[str, Dict[str, Any]] = {}
+        for bucket in scanned:
+            payload = self.drug_data.fetch_interaction_sections(bucket["ingredient_name"])
+            if payload is None:
+                coverage["no_label"].append(bucket["ingredient_name"])
+            elif not payload.get("sections"):
+                coverage["no_interaction_text"].append(bucket["ingredient_name"])
+            else:
+                labels[bucket["ingredient_key"]] = payload
+                coverage["scanned"].append(bucket["ingredient_name"])
+
+        # Scan every ordered pair. Both directions are kept: a warning that
+        # appears on both labels is stronger evidence than one that appears on
+        # only one, and the finding shows both.
+        pairs: Dict[frozenset, Dict[str, Any]] = {}
+        for source in scanned:
+            payload = labels.get(source["ingredient_key"])
+            if payload is None:
+                continue
+            for target in scanned:
+                if target["ingredient_key"] == source["ingredient_key"]:
+                    continue
+                for hit in self._scan_sections(payload["sections"], target):
+                    entry = pairs.setdefault(
+                        frozenset((source["ingredient_key"], target["ingredient_key"])),
+                        {"keys": sorted((source["ingredient_key"], target["ingredient_key"])),
+                         "mentions": []},
+                    )
+                    entry["mentions"].append({
+                        **hit,
+                        "warned_on_label_of": source["ingredient_name"],
+                        "warns_about": target["ingredient_name"],
+                        "label_id": payload.get("label_id"),
+                        "label_url": payload.get("url"),
+                        "brand_name": payload.get("brand_name"),
+                        "retrieved_at": payload.get("retrieved_at"),
+                    })
+
+        findings = []
+        for entry in sorted(pairs.values(), key=lambda e: e["keys"]):
+            findings.append(self._interaction_finding(entry, buckets))
+        return findings, coverage
+
+    def _interaction_finding(self, entry: Dict[str, Any],
+                             buckets: Dict[str, Dict]) -> Dict[str, Any]:
+        """Turn one ingredient pair's label mentions into a sourced finding."""
+        # Strongest evidence first: an outright "do not take" beats a general
+        # caution, and a label naming the drug beats one naming its class.
+        mentions = sorted(
+            entry["mentions"],
+            key=lambda m: (
+                not m["contraindication"],
+                m["match_type"] != "ingredient",
+                len(m["sentence"]),
+            ),
+        )
+        primary = mentions[0]
+        contraindicated = any(m["contraindication"] for m in mentions)
+
+        left, right = (buckets[k] for k in entry["keys"])
+        name_a, name_b = left["ingredient_name"], right["ingredient_name"]
+        products = sorted(
+            {c["product"] for c in left["contributions"]}
+            | {c["product"] for c in right["contributions"]}
+        )
+
+        section_label = primary["section"].replace("_", " ").capitalize()
+        if primary["match_type"] == "ingredient":
+            basis = (
+                f"The {primary['warned_on_label_of']} label names "
+                f"{primary['warns_about']} directly, under “{section_label}”:"
+            )
+        else:
+            basis = (
+                f"The {primary['warned_on_label_of']} label warns about "
+                f"“{primary['matched_term']}” — the class "
+                f"{primary['warns_about']} belongs to — under “{section_label}”:"
+            )
+
+        message = f"{basis} “{primary['sentence']}”"
+        if contraindicated:
+            message += (
+                " That is do-not-combine wording on the label itself, which is why "
+                "this is flagged at the highest level."
+            )
+        if len(mentions) > 1:
+            message += f" {len(mentions)} label passages mention this pairing."
+        message += (
+            " openFDA does not publish an interaction severity grade, so this "
+            "ranking reflects the label's own wording, not a clinical severity "
+            "rating. Ask a pharmacist whether it applies to you."
+        )
+
+        citations = [{
+            "source": "openFDA drug label",
+            "label_id": primary.get("label_id"),
+            "url": primary.get("label_url"),
+            "excerpt": primary["sentence"],
+            "section": primary["section"],
+            "retrieved_at": primary.get("retrieved_at"),
+        }]
+
+        return self._finding(
+            rule_id="RULE-INT-01",
+            severity="high" if contraindicated else "moderate",
+            title=f"{name_a} and {name_b} are named together on a label",
+            message=message,
+            ingredient=name_a,
+            products=products,
+            evidence={
+                "ingredient_keys": entry["keys"],
+                "ingredients": [name_a, name_b],
+                "match_type": primary["match_type"],
+                "matched_term": primary["matched_term"],
+                "contraindication_wording": contraindicated,
+                "mention_count": len(mentions),
+                "mentions": mentions[:5],
+            },
+            citations=citations,
+        )
+
+    @staticmethod
+    def _rule_interaction_gaps(coverage: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        """RULE-GAP-04/05 — name the ingredients the interaction scan could not cover."""
+        findings = []
+
+        unreadable = sorted(set(coverage["no_label"]) | set(coverage["no_interaction_text"]))
+        if unreadable:
+            findings.append(MedicationSafetyService._finding(
+                rule_id="RULE-GAP-04",
+                severity="info",
+                title=f"Interactions not checked for {len(unreadable)} ingredient(s)",
+                message=(
+                    f"No openFDA label with interaction text could be read for "
+                    f"{', '.join(unreadable)}, so this tool could not check "
+                    f"{'them' if len(unreadable) > 1 else 'it'} against the rest of your "
+                    f"list. That is a gap in the data, not a clean result — a "
+                    f"pharmacist can review these against everything else you take."
+                ),
+                ingredient=None,
+                products=[],
+                evidence={
+                    "no_label_found": sorted(set(coverage["no_label"])),
+                    "label_without_interaction_text": sorted(set(coverage["no_interaction_text"])),
+                },
+                citations=[{
+                    "source": "openFDA drug label",
+                    "url": "https://open.fda.gov/apis/drug/label/",
+                    "excerpt": (
+                        "No published label section carrying interaction text was "
+                        "available for these ingredients at the time of this check."
+                    ),
+                }],
+            ))
+
+        if coverage["skipped"]:
+            findings.append(MedicationSafetyService._finding(
+                rule_id="RULE-GAP-05",
+                severity="info",
+                title="Interaction check stopped at the ingredient limit",
+                message=(
+                    f"This list resolves to more than {MAX_INTERACTION_INGREDIENTS} distinct "
+                    f"active ingredients, so the interaction scan covered the first "
+                    f"{MAX_INTERACTION_INGREDIENTS} and left out "
+                    f"{', '.join(sorted(set(coverage['skipped'])))}. A list this long is "
+                    f"worth reviewing with a pharmacist in full rather than in part."
+                ),
+                ingredient=None,
+                products=[],
+                evidence={
+                    "ingredient_cap": MAX_INTERACTION_INGREDIENTS,
+                    "not_scanned": sorted(set(coverage["skipped"])),
+                },
+                citations=[{
+                    "source": "MedVerify rule engine",
+                    "url": None,
+                    "excerpt": (
+                        f"Interaction scanning is capped at {MAX_INTERACTION_INGREDIENTS} "
+                        f"ingredients per check; the remainder are reported as unscanned."
+                    ),
+                }],
+            ))
+
+        return findings
+
+    @staticmethod
+    def _scan_sections(sections: List[Dict[str, str]],
+                       target: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Find sentences in one label that name `target` or its drug class."""
+        key = target["ingredient_key"]
+        name = (target["ingredient_name"] or "").strip().lower()
+        ingredient_terms = {t for t in (key, name) if t}
+        class_terms = {t.lower() for t in INGREDIENT_CLASSES.get(key, [])} - ingredient_terms
+
+        hits, seen = [], set()
+        for section in sections:
+            for sentence in _SENTENCE_SPLIT_RE.split(section.get("text") or ""):
+                sentence = sentence.strip()
+                if not sentence or _COMPOSITION_RE.search(sentence):
+                    continue
+
+                lowered = sentence.lower()
+                term = MedicationSafetyService._first_term(lowered, ingredient_terms)
+                match_type = "ingredient"
+                if term is None:
+                    term = MedicationSafetyService._first_term(lowered, class_terms)
+                    match_type = "class"
+                if term is None:
+                    continue
+
+                marker = (section["section"], lowered[:120])
+                if marker in seen:
+                    continue
+                seen.add(marker)
+
+                hits.append({
+                    "section": section["section"],
+                    "sentence": sentence[:MAX_EXCERPT_CHARS],
+                    "match_type": match_type,
+                    "matched_term": term,
+                    "contraindication": any(p in lowered for p in CONTRAINDICATION_PHRASES),
+                })
+        return hits
+
+    @staticmethod
+    def _first_term(text: str, terms) -> Optional[str]:
+        """Longest whole-word term present in `text`, or None.
+
+        Longest-first so "cns depressant" is reported rather than a shorter
+        term that happens to sit inside it.
+        """
+        for term in sorted(terms, key=len, reverse=True):
+            if re.search(rf"\b{re.escape(term)}\b", text):
+                return term
+        return None
