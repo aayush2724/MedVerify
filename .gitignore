@@ -17,8 +17,8 @@ node_modules/
 dist/
 
 # Environment files
+.env
 frontend/.env
 
 # OS files
 .DS_Store
-config.bat
